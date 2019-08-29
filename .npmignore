@@ -2,6 +2,7 @@
 /coverage
 /jasmine.json
 /src
+/test
 /tsconfig.json
 /tslint.json
 *.js.map

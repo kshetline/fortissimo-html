@@ -1,3 +1,8 @@
+export interface HtmlParserOptions {
+  eol?: string;
+  fixBadChars?: boolean;
+}
+
 enum State {
   OUTSIDE_MARKUP,
   AT_MARKUP_START,
@@ -12,16 +17,18 @@ enum State {
   AT_ATTRIBUTE_VALUE,
   IN_SCRIPT_ELEMENT,
   IN_STYLE_ELEMENT,
-}
-
-export interface HtmlParserOptions {
-  eol?: string;
-  fixBadChars?: boolean;
+  IN_TEXT_AREA_ELEMENT,
 }
 
 const DEFAULT_OPTIONS: HtmlParserOptions = {
   eol: '\n',
   fixBadChars: false,
+};
+
+const specialTags = {
+  [State.IN_SCRIPT_ELEMENT]: 'script',
+  [State.IN_STYLE_ELEMENT]: 'style',
+  [State.IN_TEXT_AREA_ELEMENT]: 'textarea',
 };
 
 type AttributeCallback = (leadingSpace: string, name: string, equalSign: string, value: string, quote: string) => void;
@@ -99,7 +106,7 @@ export class HtmlParser {
   private column = 0;
   private leadingSpace = '';
   private lineNumber  = 1;
-  private options: HtmlParserOptions;
+  readonly options: HtmlParserOptions;
   private preEqualsSpace = '';
   private putBacks: string[] = [];
   private srcIndex = 0;
@@ -108,14 +115,11 @@ export class HtmlParser {
 
   constructor(
     private htmlSource: string,
-    options?: HtmlParserOptions
+    options = DEFAULT_OPTIONS
   ) {
-    if (options) {
-      this.options = options;
-      this.adjustOptions();
-    }
-    else
-      this.options = {};
+    this.options = {};
+    Object.assign(this.options, options);
+    this.adjustOptions();
   }
 
   onAttribute(callback: AttributeCallback): HtmlParser {
@@ -228,8 +232,12 @@ export class HtmlParser {
                 this.putBack(ch);
             break;
 
-            case '!': this.state = State.AT_DECLARATION_START; break;
-            case '?': this.state = State.AT_PROCESSING_START; break;
+            case '!':
+            case '?':
+              this.state = (ch === '!' ? State.AT_DECLARATION_START : State.AT_PROCESSING_START);
+              this.leadingSpace = this.collectedSpace;
+              this.collectedSpace = '';
+            break;
 
             default:
               this.state = State.AT_OPEN_TAG_START;
@@ -302,6 +310,8 @@ export class HtmlParser {
               this.state = State.IN_SCRIPT_ELEMENT;
             else if (this.tagName === 'style')
               this.state = State.IN_STYLE_ELEMENT;
+            else if (this.tagName === 'textarea')
+              this.state = State.IN_TEXT_AREA_ELEMENT;
             else
               this.state = State.OUTSIDE_MARKUP;
           }
@@ -336,7 +346,7 @@ export class HtmlParser {
         break;
 
         case State.AT_DECLARATION_START:
-          if (ch === '-') {
+          if (this.collectedSpace.length === 0 && ch === '-') {
             const ch2 = this.getChar();
 
             if (ch2 === '-') {
@@ -347,28 +357,30 @@ export class HtmlParser {
               this.putBack(ch2);
           }
 
-          [content, terminated] = this.gatherDeclarationOrProcessing(ch);
+          [content, terminated] = this.gatherDeclarationOrProcessing(this.collectedSpace + ch);
 
           if (!terminated)
             this.reportError('File ended in unterminated declaration');
           else if (this.callbackDeclaration)
-            this.callbackDeclaration(this.collectedSpace, content);
+            this.callbackDeclaration(this.leadingSpace, content);
           else if (this.callbackUnhandled)
-            this.callbackUnhandled(this.collectedSpace, '<!' + content + '>');
+            this.callbackUnhandled(this.leadingSpace, '<!' + content + '>');
 
+          this.collectedSpace = '';
           this.state = State.OUTSIDE_MARKUP;
         break;
 
         case State.AT_PROCESSING_START:
-          [content, terminated] = this.gatherDeclarationOrProcessing(ch);
+          [content, terminated] = this.gatherDeclarationOrProcessing(this.collectedSpace + ch);
 
           if (!terminated)
             this.reportError('File ended in unterminated processing instruction');
           else if (this.callbackProcessing)
-            this.callbackProcessing(this.collectedSpace, content);
+            this.callbackProcessing(this.leadingSpace, content);
           else if (this.callbackUnhandled)
-            this.callbackUnhandled(this.collectedSpace, '<?' + content + '>');
+            this.callbackUnhandled(this.leadingSpace, '<?' + content + '>');
 
+          this.collectedSpace = '';
           this.state = State.OUTSIDE_MARKUP;
         break;
 
@@ -387,10 +399,14 @@ export class HtmlParser {
         break;
 
         case State.IN_STYLE_ELEMENT:
-          [content, closeTag, terminated] = this.gatherStyle(ch);
+        case State.IN_SCRIPT_ELEMENT:
+        case State.IN_TEXT_AREA_ELEMENT:
+          const tag = specialTags[this.state];
+
+          [content, closeTag, terminated] = this.gatherUntilEndTag(tag, ch);
 
           if (!terminated)
-            this.reportError('File ended in unterminated style section');
+            this.reportError(`File ended in unterminated ${tag} section`);
           else {
             if (content) {
               let trailingWhiteSpace = '';
@@ -407,11 +423,10 @@ export class HtmlParser {
               this.collectedSpace = '';
             }
 
-            const $$ = /^<\/(style)(\s*)>$/i.exec(closeTag);
+            const $$ = new RegExp('^<\\/(' + tag + ')(\\s*)>$', 'i').exec(closeTag);
 
             this.doCloseTagCallback('', $$[1], $$[2]);
           }
-
         break;
       }
     }
@@ -617,73 +632,36 @@ export class HtmlParser {
       return ['', true];
 
     let content = init;
-    let inQuotes = false;
     let ch: string;
 
     while ((ch = this.getChar())) {
-      content += ch;
+      if (ch === '>')
+        return [content, true];
 
-      if (!inQuotes) {
-        if (ch === '"')
-          inQuotes = true;
-        else if (ch === '>')
-          return [content.substr(0, content.length - 1), true];
-      }
-      else if (ch === '"')
-        inQuotes = true;
-    }
+      content += ch;
+   }
 
     return [content, false];
   }
 
-  private gatherStyle(init = ''): [string, string, boolean] {
-    const ender = '</style';
+  private gatherUntilEndTag(endTag: string, init = ''): [string, string, boolean] {
+    const ender = '</' + endTag;
+    const len = ender.length;
     let content = init;
-    let inSingleQuotes = (init === "'");
-    let inDoubleQuotes = (init === '"');
-    let inComment = 0;
     let endStage = 0;
     let ch: string;
 
     while ((ch = this.getChar())) {
       content += ch;
 
-      if (!inSingleQuotes && !inDoubleQuotes && (inComment === 0 || inComment === 1)) {
-        if (ch === "'") {
-          inSingleQuotes = true;
-          endStage = 0;
-          inComment = 0;
-        }
-        else if (ch === '"') {
-          inDoubleQuotes = true;
-          endStage = 0;
-          inComment = 0;
-        }
-        else if (inComment === 0 && ch === '/' && endStage !== 1)
-          ++inComment;
-        else if ((inComment === 1 || endStage === 2) && ch === '*')
-          inComment = -2;
-        else if (endStage >= 7 && ch === '>')
-          return [content.substr(0, content.length - endStage - 1), content.substr(content.length - endStage - 1), true];
-        else if (endStage >= 7 && isWhiteSpace(ch))
-          ++endStage;
-        else if (endStage < 7 && ch.toLowerCase() === ender.charAt(endStage)) {
-          ++endStage;
-
-          if (endStage === 2)
-            inComment = 0;
-        }
-        else
-          endStage = 0;
-      }
-      else if (inSingleQuotes && ch === "'")
-        inSingleQuotes = false;
-      else if (inDoubleQuotes && ch === '"')
-        inDoubleQuotes = false;
-      else if ((inComment === -2 && ch === '*') || (inComment === -1 && ch === '/'))
-        ++inComment;
-      else if (inComment === -1)
-        --inComment;
+      if (endStage >= len && ch === '>')
+        return [content.substr(0, content.length - endStage - 1), content.substr(content.length - endStage - 1), true];
+      else if (endStage >= len && isWhiteSpace(ch))
+        ++endStage;
+      else if (endStage < len && ch.toLowerCase() === ender.charAt(endStage))
+        ++endStage;
+      else
+        endStage = 0;
     }
 
     return [content, '', false];

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>CSS Overflow Behavior Test</title>
+  <style>
+    body {
+      margin: 4em;
+    }
+
+    .backdrop {
+      background-color: #ACF;
+      display: relative;
+      width: 80vw;
+    }
+
+    .outer-wrapper {
+      position: relative;
+    }
+
+    .sizer {
+      height: 1px;
+      opacity: 0;
+      position: absolute;
+      width: 100%;
+      z-index: -1000;
+    }
+
+    .inner-wrapper {
+      background-color: #BFC;
+      overflow: visible;
+      position: relative;
+      width: -moz-fit-content;
+      width: fit-content;
+    }
+
+    .content {
+      margin: 1em;
+      min-width: 500px;
+    }
+  </style>
+  <script>
+    function callback(value) {
+      console.log(value, 'This shouldn\'t be seen </div> as a tag');
+    }
+  </script>
+</head>
+<body>
+  <p>One</p>
+  <p>Two</p>
+  <p>Three</p>
+  <? an ignored processing instruction >
+  <! -- not a comment >
+  <div class="backdrop">
+    <div class='outer-wrapper'>
+      <div class="sizer">&nbsp;</div>
+      <div class="inner-wrapper">
+        <div class="content">
+          <ul>
+            <li>One</li>
+            <li>thing</li>
+            <li>after</li>
+            <li>another</li>
+            <li>after</li>
+            <li>another</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  <textarea rows=10 cols=80 spellcheck=false>
+Attempts <b>at formatting</b> should be <i>ignored</i> here, with markup
+taken as literal text.
+
+<!-- Comment? -->
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor
+incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis
+nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu
+fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in
+culpa qui officia deserunt mollit anim id est laborum.</textarea>
+</body>
+</html>

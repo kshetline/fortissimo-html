@@ -27,10 +27,12 @@ function processFile(file: string) {
       .onAttribute((leading, name, equals, value, quote) => console.log('attribute:', name + equals.trim() + quote + value + quote))
       .onCloseTag((leading, tag, trailing) => console.log('close:', '</' + tag + trailing + '>'))
       .onComment((leading, comment) => console.log('comment:', comment))
+      .onDeclaration((leading, declaration) => console.log('declaration:', '<!' + declaration + '>'))
       .onEnd(() => console.log('*** Ta da! ***'))
       .onError((error, line, col) => console.error('*** %s: [%s, %s]', error, line, col))
       .onOpenTagEnd((leading, tag, end) => console.log('tag end:', end))
       .onOpenTagStart((leading, tag) => console.log('tag:', tag))
+      .onProcessing((leading, processing) => console.log('processing:', '<?' + processing + '>'))
       .onText((leading, text) => console.log('text:', leading + text))
       .onUnhandled((leading, text, trailing = '') => console.log('???:', leading + text + trailing))
       .parse();
