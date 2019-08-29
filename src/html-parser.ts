@@ -25,7 +25,7 @@ const DEFAULT_OPTIONS: HtmlParserOptions = {
   fixBadChars: false,
 };
 
-const specialTags = {
+const tagForState = {
   [State.IN_SCRIPT_ELEMENT]: 'script',
   [State.IN_STYLE_ELEMENT]: 'style',
   [State.IN_TEXT_AREA_ELEMENT]: 'textarea',
@@ -34,7 +34,7 @@ const specialTags = {
 type AttributeCallback = (leadingSpace: string, name: string, equalSign: string, value: string, quote: string) => void;
 type BasicCallback = (leadingSpace: string, text: string, trailing?: string) => void;
 type EndCallback = (finalSpace?: string) => void;
-type ErrorCallback = (error: string, line?: number, column?: number) => void;
+type ErrorCallback = (error: string, line?: number, column?: number, source?: string) => void;
 
 function isWhiteSpace(ch: string) {
   return ch !== undefined && ch <= ' ';
@@ -107,6 +107,7 @@ export class HtmlParser {
   private leadingSpace = '';
   private lineNumber  = 1;
   readonly options: HtmlParserOptions;
+  private pendingSource = '';
   private preEqualsSpace = '';
   private putBacks: string[] = [];
   private srcIndex = 0;
@@ -202,17 +203,19 @@ export class HtmlParser {
 
           let [text, nextWSStart] = this.gatherText();
           if (text) {
-            let trailingWhiteSpace = '';
+            const collected = this.collectedSpace;
 
             if (nextWSStart > 0) {
-              trailingWhiteSpace = text.substr(nextWSStart);
+              this.collectedSpace = text.substr(nextWSStart);
               text = text.substr(0, nextWSStart);
             }
+            else
+              this.collectedSpace = '';
 
             if (this.callbackText)
-              this.callbackText(this.collectedSpace, text, trailingWhiteSpace);
+              this.callbackText(collected, text, '');
 
-            this.collectedSpace = '';
+            this.pendingSource = '';
           }
 
           this.state = State.AT_MARKUP_START;
@@ -254,6 +257,7 @@ export class HtmlParser {
             this.callbackUnhandled(this.collectedSpace, '<' + this.tagName);
 
           this.collectedSpace = '';
+          this.pendingSource = '';
           this.state = State.AT_ATTRIBUTE_START;
         break;
 
@@ -305,6 +309,7 @@ export class HtmlParser {
               this.callbackUnhandled(this.collectedSpace, end);
 
             this.collectedSpace = '';
+            this.pendingSource = '';
 
             if (this.tagName === 'script')
               this.state = State.IN_SCRIPT_ELEMENT;
@@ -367,6 +372,7 @@ export class HtmlParser {
             this.callbackUnhandled(this.leadingSpace, '<!' + content + '>');
 
           this.collectedSpace = '';
+          this.pendingSource = '';
           this.state = State.OUTSIDE_MARKUP;
         break;
 
@@ -381,27 +387,29 @@ export class HtmlParser {
             this.callbackUnhandled(this.leadingSpace, '<?' + content + '>');
 
           this.collectedSpace = '';
+          this.pendingSource = '';
           this.state = State.OUTSIDE_MARKUP;
         break;
 
         case State.AT_COMMENT_START:
-          [content, terminated] = this.gatherComment(ch);
+          [content, terminated] = this.gatherComment(this.collectedSpace + ch);
 
           if (!terminated)
             this.reportError('File ended in unterminated comment');
           else if (this.callbackComment)
-            this.callbackComment(this.collectedSpace, content);
+            this.callbackComment(this.leadingSpace, content);
           else if (this.callbackUnhandled)
-            this.callbackUnhandled(this.collectedSpace, '<|--' + content + '-->');
+            this.callbackUnhandled(this.leadingSpace, '<|--' + content + '-->');
 
           this.collectedSpace = '';
+          this.pendingSource = '';
           this.state = State.OUTSIDE_MARKUP;
         break;
 
         case State.IN_STYLE_ELEMENT:
         case State.IN_SCRIPT_ELEMENT:
         case State.IN_TEXT_AREA_ELEMENT:
-          const tag = specialTags[this.state];
+          const tag = tagForState[this.state];
 
           [content, closeTag, terminated] = this.gatherUntilEndTag(tag, ch);
 
@@ -421,6 +429,7 @@ export class HtmlParser {
                 this.callbackText(this.collectedSpace, content, trailingWhiteSpace);
 
               this.collectedSpace = '';
+              this.pendingSource = '';
             }
 
             const $$ = new RegExp('^<\\/(' + tag + ')(\\s*)>$', 'i').exec(closeTag);
@@ -437,9 +446,11 @@ export class HtmlParser {
 
   private reportError(message: string) {
     if (this.callbackError)
-      this.callbackError(message, this.lineNumber, this.column);
+      this.callbackError(message, this.lineNumber, this.column, this.pendingSource);
 
     this.state = State.OUTSIDE_MARKUP;
+    this.collectedSpace = '';
+    this.pendingSource = '';
   }
 
   private doCloseTagCallback(leadingSpace: string, tag: string, trailing: string) {
@@ -450,6 +461,7 @@ export class HtmlParser {
 
     this.state = State.OUTSIDE_MARKUP;
     this.collectedSpace = '';
+    this.pendingSource = '';
   }
 
   private doAttributeCallback(equalSign = '', value = '', quote = ''): void {
@@ -457,6 +469,8 @@ export class HtmlParser {
       this.callbackAttribute(this.leadingSpace, this.attribute, equalSign, value, quote);
     else if (this.callbackUnhandled)
       this.callbackUnhandled(this.leadingSpace, this.attribute + equalSign + quote + value + quote);
+
+    this.pendingSource = '';
   }
 
   private getChar(): string {
@@ -464,11 +478,14 @@ export class HtmlParser {
 
     if (this.putBacks.length > 0) {
       ch = this.putBacks.pop();
+      this.pendingSource += ch;
 
       if (ch === '\n' || ch === '\r' || ch === '\r\n') {
         ++this.lineNumber;
         this.column = 0;
       }
+      else
+        ++this.column;
 
       return ch;
     }
@@ -507,11 +524,14 @@ export class HtmlParser {
       }
     }
 
+    this.pendingSource += ch;
+
     return ch;
   }
 
   private putBack(ch: string): void {
     this.putBacks.push(ch);
+    this.pendingSource = this.pendingSource.substr(0, this.pendingSource.length - ch.length);
 
     if (ch === '\n' || ch === '\r' || ch === '\r\n')
       --this.lineNumber;

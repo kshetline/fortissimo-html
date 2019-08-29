@@ -1,7 +1,9 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>CSS Overflow Behavior Test</title>
+  <title>Sample HTML</title>
+  <meta charset="UTF-8">
+  <!-- A comment -->
   <style>
     body {
       margin: 4em;
@@ -9,7 +11,7 @@
 
     .backdrop {
       background-color: #ACF;
-      display: relative;
+      position: relative;
       width: 80vw;
     }
 
@@ -39,9 +41,11 @@
     }
   </style>
   <script>
-    function callback(value) {
-      console.log(value, 'This shouldn\'t be seen </div> as a tag');
+    function foo(value) {
+      console.log(value, '&szlig; This shouldn\'t be seen </div> as a tag <script>');
     }
+
+    foo(Math.acos(0) * 2);
   </script>
 </head>
 <body>
@@ -53,7 +57,8 @@
   <div class="backdrop">
     <div class='outer-wrapper'>
       <div class="sizer">&nbsp;</div>
-      <div class="inner-wrapper">
+      <!-- Forced error! -->
+      <div class="inner-wrapper" foo/bar="baz">
         <div class="content">
           <ul>
             <li>One</li>
@@ -67,9 +72,11 @@
       </div>
     </div>
   </div>
+  <br/>
+  <br>
   <textarea rows=10 cols=80 spellcheck=false>
 Attempts <b>at formatting</b> should be <i>ignored</i> here, with markup
-taken as literal text.
+taken as literal text. &amp; yet, entities will get parsed - &szlig;!
 
 <!-- Comment? -->
 Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor
