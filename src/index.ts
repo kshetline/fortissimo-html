@@ -1,7 +1,5 @@
-#!/usr/local/bin/node
-
 import commander from 'commander';
-import glob from 'glob';
+import fg from 'fast-glob';
 import fs from 'fs';
 import { HtmlParser } from './html-parser';
 
@@ -10,19 +8,11 @@ commander
   .arguments('<globs...>')
   .action((globs: string[]) => {
     const options = {
-      ignore: commander.exclude,
+      ignore: commander.exclude ? [commander.exclude] : undefined,
     };
+    const files = fg.sync(globs, options);
 
-    globs.forEach(aGlob => {
-      glob(aGlob, options, (err, files) => {
-        if (err)
-          console.error(err);
-        else if (!files || files.length === 0)
-          console.error('No match for "' + aGlob + '".');
-        else
-          files.forEach(file => processFile(file));
-      });
-    });
+    files.forEach(file => processFile(file));
   })
   .parse(process.argv);
 
@@ -42,7 +32,7 @@ function processFile(file: string) {
       .onOpenTagEnd((leading, tag, end) => console.log('tag end:', end))
       .onOpenTagStart((leading, tag) => console.log('tag:', tag))
       .onText((leading, text) => console.log('text:', leading + text))
-      .onUnhandled((leading, text, trailing) => console.log('???:', leading + text + (trailing ? trailing : '')))
+      .onUnhandled((leading, text, trailing = '') => console.log('???:', leading + text + trailing))
       .parse();
   }
   catch (err) {

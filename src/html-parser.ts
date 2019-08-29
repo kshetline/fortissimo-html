@@ -10,6 +10,8 @@ enum State {
   AT_ATTRIBUTE_START,
   AT_ATTRIBUTE_ASSIGNMENT,
   AT_ATTRIBUTE_VALUE,
+  IN_SCRIPT_ELEMENT,
+  IN_STYLE_ELEMENT,
 }
 
 export interface HtmlParserOptions {
@@ -52,7 +54,7 @@ function isPCENChar(ch: string) {
 }
 
 function isAttributeNameChar(ch: string): boolean {
-  return ch > ' ' && !/["`>/=]/.test(ch) && (ch < '0x80' || ch >= '0xA0');
+  return ch > ' ' && !/["`>/=]/.test(ch) && (ch < '0x7F' || ch >= '0xA0');
 }
 
 function fixBadChars(s: string): string {
@@ -187,6 +189,7 @@ export class HtmlParser {
     let ch: string;
     let content: string;
     let terminated: boolean;
+    let closeTag: string;
 
     while ((ch = this.getNonSpace()) !== undefined) {
       switch (this.state) {
@@ -258,15 +261,8 @@ export class HtmlParser {
             this.reportError('Syntax error in close tag');
             break;
           }
-          else {
-            if (this.callbackCloseTag)
-              this.callbackCloseTag(this.leadingSpace, this.tagName, this.collectedSpace);
-            else if (this.callbackUnhandled)
-              this.callbackUnhandled(this.leadingSpace, '</' + this.tagName, this.collectedSpace + '>');
-
-            this.collectedSpace = '';
-            this.state = State.OUTSIDE_MARKUP;
-          }
+          else
+            this.doCloseTagCallback(this.leadingSpace, this.tagName, this.collectedSpace);
         break;
 
         case State.AT_ATTRIBUTE_START:
@@ -301,7 +297,13 @@ export class HtmlParser {
               this.callbackUnhandled(this.collectedSpace, end);
 
             this.collectedSpace = '';
-            this.state = State.OUTSIDE_MARKUP;
+
+            if (this.tagName === 'script')
+              this.state = State.IN_SCRIPT_ELEMENT;
+            else if (this.tagName === 'style')
+              this.state = State.IN_STYLE_ELEMENT;
+            else
+              this.state = State.OUTSIDE_MARKUP;
           }
         break;
 
@@ -382,6 +384,35 @@ export class HtmlParser {
 
           this.collectedSpace = '';
           this.state = State.OUTSIDE_MARKUP;
+        break;
+
+        case State.IN_STYLE_ELEMENT:
+          [content, closeTag, terminated] = this.gatherStyle(ch);
+
+          if (!terminated)
+            this.reportError('File ended in unterminated style section');
+          else {
+            if (content) {
+              let trailingWhiteSpace = '';
+              const $ = /^(.*?)(\s*)$/.exec(content);
+
+              if ($) {
+                content = $[1];
+                trailingWhiteSpace = $[2];
+              }
+
+              if (this.callbackText)
+                this.callbackText(this.collectedSpace, content, trailingWhiteSpace);
+
+              this.collectedSpace = '';
+            }
+
+            const $$ = /^<\/(style)(\s*)>$/i.exec(closeTag);
+
+            this.doCloseTagCallback('', $$[1], $$[2]);
+          }
+
+        break;
       }
     }
 
@@ -394,6 +425,16 @@ export class HtmlParser {
       this.callbackError(message, this.lineNumber, this.column);
 
     this.state = State.OUTSIDE_MARKUP;
+  }
+
+  private doCloseTagCallback(leadingSpace: string, tag: string, trailing: string) {
+    if (this.callbackCloseTag)
+      this.callbackCloseTag(leadingSpace, tag, trailing);
+    else if (this.callbackUnhandled)
+      this.callbackUnhandled(this.leadingSpace, '</' + tag, trailing + '>');
+
+    this.state = State.OUTSIDE_MARKUP;
+    this.collectedSpace = '';
   }
 
   private doAttributeCallback(equalSign = '', value = '', quote = ''): void {
@@ -513,11 +554,8 @@ export class HtmlParser {
     return [text, nextWSStart];
   }
 
-  private gatherTagName(init?: string): void {
-    if (init)
-      this.tagName = init;
-    else
-      this.tagName = '';
+  private gatherTagName(init = ''): void {
+    this.tagName = init;
 
     let ch: string;
 
@@ -527,11 +565,8 @@ export class HtmlParser {
     this.putBack(ch);
   }
 
-  private gatherAttributeName(init?: string): void {
-    if (init)
-      this.attribute = init;
-    else
-      this.attribute = '';
+  private gatherAttributeName(init = ''): void {
+    this.attribute = init;
 
     let ch: string;
 
@@ -583,7 +618,6 @@ export class HtmlParser {
 
     let content = init;
     let inQuotes = false;
-
     let ch: string;
 
     while ((ch = this.getChar())) {
@@ -600,6 +634,59 @@ export class HtmlParser {
     }
 
     return [content, false];
+  }
+
+  private gatherStyle(init = ''): [string, string, boolean] {
+    const ender = '</style';
+    let content = init;
+    let inSingleQuotes = (init === "'");
+    let inDoubleQuotes = (init === '"');
+    let inComment = 0;
+    let endStage = 0;
+    let ch: string;
+
+    while ((ch = this.getChar())) {
+      content += ch;
+
+      if (!inSingleQuotes && !inDoubleQuotes && (inComment === 0 || inComment === 1)) {
+        if (ch === "'") {
+          inSingleQuotes = true;
+          endStage = 0;
+          inComment = 0;
+        }
+        else if (ch === '"') {
+          inDoubleQuotes = true;
+          endStage = 0;
+          inComment = 0;
+        }
+        else if (inComment === 0 && ch === '/' && endStage !== 1)
+          ++inComment;
+        else if ((inComment === 1 || endStage === 2) && ch === '*')
+          inComment = -2;
+        else if (endStage >= 7 && ch === '>')
+          return [content.substr(0, content.length - endStage - 1), content.substr(content.length - endStage - 1), true];
+        else if (endStage >= 7 && isWhiteSpace(ch))
+          ++endStage;
+        else if (endStage < 7 && ch.toLowerCase() === ender.charAt(endStage)) {
+          ++endStage;
+
+          if (endStage === 2)
+            inComment = 0;
+        }
+        else
+          endStage = 0;
+      }
+      else if (inSingleQuotes && ch === "'")
+        inSingleQuotes = false;
+      else if (inDoubleQuotes && ch === '"')
+        inDoubleQuotes = false;
+      else if ((inComment === -2 && ch === '*') || (inComment === -1 && ch === '/'))
+        ++inComment;
+      else if (inComment === -1)
+        --inComment;
+    }
+
+    return [content, '', false];
   }
 
   private eatWhiteSpace(init?: string): void {

@@ -16,7 +16,7 @@
   "dependencies": {
     "@types/glob": "^7.1.1",
     "commander": "^3.0.0",
-    "glob": "^7.1.4",
+    "fast-glob": "^3.0.4",
     "tslint": "^5.19.0",
     "tslint-no-unused-expression-chai": "^0.1.4",
     "typescript": "^3.5.3"
