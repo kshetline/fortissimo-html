@@ -1,3 +1,5 @@
+import { processMillis } from './util';
+
 export interface HtmlParserOptions {
   eol?: string;
   fixBadChars?: boolean;
@@ -24,6 +26,8 @@ const DEFAULT_OPTIONS: HtmlParserOptions = {
   eol: '\n',
   fixBadChars: false,
 };
+
+const DEFAULT_YIELD_TIME = 50;
 
 const tagForState = {
   [State.IN_SCRIPT_ELEMENT]: 'script',
@@ -107,12 +111,14 @@ export class HtmlParser {
   private leadingSpace = '';
   private lineNumber  = 1;
   readonly options: HtmlParserOptions;
+  private parsingResolver: () => void;
   private pendingSource = '';
   private preEqualsSpace = '';
   private putBacks: string[] = [];
   private srcIndex = 0;
   private state = State.OUTSIDE_MARKUP;
   private tagName = '';
+  private yieldTime = DEFAULT_YIELD_TIME;
 
   constructor(
     private htmlSource: string,
@@ -185,16 +191,24 @@ export class HtmlParser {
     this.callbackCloseTag = this.callbackCloseTag || this.callbackUnhandled;
     this.callbackText = this.callbackText || this.callbackUnhandled;
 
-    this.parseUntilEnd();
-
-    this.callbackEnd(this.collectedSpace);
+    this.parseLoop();
   }
 
-  private parseUntilEnd(): void {
+  async parseAsync(yieldTime = DEFAULT_YIELD_TIME): Promise<void> {
+    this.yieldTime = yieldTime;
+    setTimeout(() => this.parseLoop());
+
+    return new Promise<void>(resolve => {
+      this.parsingResolver = resolve;
+    });
+  }
+
+  private parseLoop(): void {
     let ch: string;
     let content: string;
     let terminated: boolean;
     let closeTag: string;
+    const startTime = processMillis();
 
     while ((ch = this.getNonSpace()) !== undefined) {
       switch (this.state) {
@@ -438,10 +452,20 @@ export class HtmlParser {
           }
         break;
       }
+
+      if (this.parsingResolver && processMillis() >= startTime + this.yieldTime) {
+        setTimeout(() => this.parseLoop());
+        return;
+      }
     }
 
     if (this.state !== State.OUTSIDE_MARKUP)
       this.callbackError('Unexpected end of file', this.lineNumber, this.column);
+
+    this.callbackEnd(this.collectedSpace);
+
+    if (this.parsingResolver)
+      this.parsingResolver();
   }
 
   private reportError(message: string) {

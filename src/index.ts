@@ -1,7 +1,9 @@
 import commander from 'commander';
 import fg from 'fast-glob';
 import fs from 'fs';
+
 import { HtmlParser } from './html-parser';
+import { processMillis } from './util';
 
 commander
   .option('-x, --exclude <exclude>', 'pattern for files/directories to exclude')
@@ -21,6 +23,7 @@ function processFile(file: string) {
 
   try {
     const content = fs.readFileSync(file, {encoding: 'utf8'});
+    const startTime = processMillis();
     const parser = new HtmlParser(content);
     let rebuilt = '';
 
@@ -42,8 +45,14 @@ function processFile(file: string) {
         rebuilt += leading + '<!' + declaration + '>';
       })
       .onEnd(trailing => {
-        console.log('*** Ta da! ***');
         rebuilt += trailing;
+
+        const totalTime = processMillis() - startTime;
+        const size = content.length / 1048576;
+        const speed = (size / totalTime * 1000);
+
+        console.log('*** Finished in %s msec (%s MB/sec)', totalTime.toFixed(1), speed.toFixed(2));
+        console.log('*** output matches input: ' + (rebuilt === content));
       })
       .onError((error, line, col, source) => {
         console.error('*** %s ***\n***%s: [%s, %s]', source, error, line, col);
@@ -70,8 +79,6 @@ function processFile(file: string) {
         rebuilt += leading + text + trailing;
       })
       .parse();
-
-      console.log('*** output matches input: ' + (rebuilt === content));
   }
   catch (err) {
     console.error('Error reading file "%s": %s', file, err.toString());
