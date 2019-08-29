@@ -5,6 +5,59 @@ export interface HtmlParserOptions {
   fixBadChars?: boolean;
 }
 
+export class Comment {
+  constructor(public text: string) {}
+
+  toString(): string {
+    return '<!--' + this.text + '-->';
+  }
+}
+
+export class Declaration {
+  constructor(public text: string) {}
+
+  toString(): string {
+    return '<!' + this.text + '>';
+  }
+}
+
+export class ProcessingInstruction {
+  constructor(public text: string) {}
+
+  toString(): string {
+    return '<?' + this.text + '>';
+  }
+}
+
+type DomChild = DomNode | string | Comment | Declaration | ProcessingInstruction;
+
+export class DomNode {
+  attributes: string[];
+  values: Record<string, string>;
+  children: DomChild[];
+
+  constructor(public tag: string) {}
+
+  addAttribute(name: string, value: string): void {
+    this.attributes = this.attributes || [];
+    this.attributes.push(name);
+    this.values = this.values || {};
+    this.values[name] = value;
+  }
+
+  addChild(child: DomChild, leadingSpace?: string): void {
+    this.children = this.children || [];
+
+    if (this.children.length > 0 && typeof this.children[this.children.length - 1] === 'string')
+      this.children[this.children.length - 1] += leadingSpace;
+
+    this.children.push(child);
+  }
+}
+
+const VOID_ELEMENTS = ['area', 'base', 'br',  'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param',
+                       'source', 'track', 'wbr', 'command', 'keygen', 'menuitem'];
+
 enum State {
   OUTSIDE_MARKUP,
   AT_MARKUP_START,
@@ -108,10 +161,12 @@ export class HtmlParser {
   private attribute = '';
   private collectedSpace = '';
   private column = 0;
+  private dom: DomNode = new DomNode('/');
+  private domStack = [this.dom];
   private leadingSpace = '';
   private lineNumber  = 1;
   readonly options: HtmlParserOptions;
-  private parsingResolver: () => void;
+  private parsingResolver: (node: DomNode) => void;
   private pendingSource = '';
   private preEqualsSpace = '';
   private putBacks: string[] = [];
@@ -184,7 +239,7 @@ export class HtmlParser {
     return this;
   }
 
-  parse(): void {
+  parse(): DomNode {
     if (!this.callbackEnd)
       throw new Error('onEnd callback must be specified');
 
@@ -192,13 +247,15 @@ export class HtmlParser {
     this.callbackText = this.callbackText || this.callbackUnhandled;
 
     this.parseLoop();
+
+    return this.dom;
   }
 
-  async parseAsync(yieldTime = DEFAULT_YIELD_TIME): Promise<void> {
+  async parseAsync(yieldTime = DEFAULT_YIELD_TIME): Promise<DomNode> {
     this.yieldTime = yieldTime;
     setTimeout(() => this.parseLoop());
 
-    return new Promise<void>(resolve => {
+    return new Promise<DomNode>(resolve => {
       this.parsingResolver = resolve;
     });
   }
@@ -208,9 +265,12 @@ export class HtmlParser {
     let content: string;
     let terminated: boolean;
     let closeTag: string;
+    let node: DomNode;
     const startTime = processMillis();
 
     while ((ch = this.getNonSpace()) !== undefined) {
+      const parent = this.domStack[this.domStack.length - 1];
+
       switch (this.state) {
         case State.OUTSIDE_MARKUP:
           this.putBack(ch);
@@ -230,6 +290,7 @@ export class HtmlParser {
               this.callbackText(collected, text, '');
 
             this.pendingSource = '';
+            parent.addChild(collected + text);
           }
 
           this.state = State.AT_MARKUP_START;
@@ -270,6 +331,9 @@ export class HtmlParser {
           else if (this.callbackUnhandled)
             this.callbackUnhandled(this.collectedSpace, '<' + this.tagName);
 
+          node = new DomNode(this.tagName);
+          parent.addChild(node, this.collectedSpace);
+          this.domStack.push(node);
           this.collectedSpace = '';
           this.pendingSource = '';
           this.state = State.AT_ATTRIBUTE_START;
@@ -287,8 +351,12 @@ export class HtmlParser {
             this.reportError('Syntax error in close tag');
             break;
           }
-          else
+          else {
             this.doCloseTagCallback(this.leadingSpace, this.tagName, this.collectedSpace);
+
+            if (parent.tag === this.tagName)
+              this.domStack.pop();
+          }
         break;
 
         case State.AT_ATTRIBUTE_START:
@@ -325,7 +393,11 @@ export class HtmlParser {
             this.collectedSpace = '';
             this.pendingSource = '';
 
-            if (this.tagName === 'script')
+            if (end.length > 1 || VOID_ELEMENTS.indexOf(this.tagName) >= 0) {
+              this.domStack.pop();
+              this.state = State.OUTSIDE_MARKUP;
+            }
+            else if (this.tagName === 'script')
               this.state = State.IN_SCRIPT_ELEMENT;
             else if (this.tagName === 'style')
               this.state = State.IN_STYLE_ELEMENT;
@@ -344,6 +416,7 @@ export class HtmlParser {
           else {
             this.doAttributeCallback();
             this.putBack(ch);
+            parent.addAttribute(this.attribute, '');
             this.state = State.AT_ATTRIBUTE_START;
           }
         break;
@@ -351,6 +424,7 @@ export class HtmlParser {
         case State.AT_ATTRIBUTE_VALUE:
           if (ch === '>') {
             this.doAttributeCallback(this.preEqualsSpace + '=');
+            parent.addAttribute(this.attribute, '');
             this.putBack(ch);
           }
           else {
@@ -358,6 +432,7 @@ export class HtmlParser {
             const value = this.gatherAttributeValue(quote, quote ? '' : ch);
 
             this.doAttributeCallback(this.preEqualsSpace + '=' + this.collectedSpace, value, quote);
+            parent.addAttribute(this.attribute, value);
             this.collectedSpace = '';
           }
 
@@ -387,6 +462,8 @@ export class HtmlParser {
 
           this.collectedSpace = '';
           this.pendingSource = '';
+          parent.addChild(new Declaration(content), this.leadingSpace);
+          this.leadingSpace = '';
           this.state = State.OUTSIDE_MARKUP;
         break;
 
@@ -402,6 +479,8 @@ export class HtmlParser {
 
           this.collectedSpace = '';
           this.pendingSource = '';
+          parent.addChild(new ProcessingInstruction(content), this.leadingSpace);
+          this.leadingSpace = '';
           this.state = State.OUTSIDE_MARKUP;
         break;
 
@@ -417,6 +496,8 @@ export class HtmlParser {
 
           this.collectedSpace = '';
           this.pendingSource = '';
+          parent.addChild(new Comment(content), this.leadingSpace);
+          this.leadingSpace = '';
           this.state = State.OUTSIDE_MARKUP;
         break;
 
@@ -439,16 +520,20 @@ export class HtmlParser {
                 trailingWhiteSpace = $[2];
               }
 
-              if (this.callbackText)
+              if (this.callbackText) {
                 this.callbackText(this.collectedSpace, content, trailingWhiteSpace);
+                content = this.collectedSpace + content + trailingWhiteSpace;
+              }
 
               this.collectedSpace = '';
               this.pendingSource = '';
+              parent.addChild(content);
             }
 
             const $$ = new RegExp('^<\\/(' + tag + ')(\\s*)>$', 'i').exec(closeTag);
 
             this.doCloseTagCallback('', $$[1], $$[2]);
+            this.domStack.pop();
           }
         break;
       }
@@ -465,7 +550,7 @@ export class HtmlParser {
     this.callbackEnd(this.collectedSpace);
 
     if (this.parsingResolver)
-      this.parsingResolver();
+      this.parsingResolver(this.dom);
   }
 
   private reportError(message: string) {
