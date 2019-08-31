@@ -2,7 +2,8 @@ import commander from 'commander';
 import fg from 'fast-glob';
 import fs from 'fs';
 
-import { Comment, Declaration, HtmlParser, ProcessingInstruction } from './html-parser';
+import { SpecialNode } from './dom';
+import { HtmlParser } from './html-parser';
 import { processMillis } from './util';
 
 commander
@@ -81,7 +82,7 @@ function processFile(file: string) {
       .parse();
 
       console.log(JSON.stringify(dom, (name, value) => {
-        if (value instanceof Comment || value instanceof Declaration || value instanceof ProcessingInstruction)
+        if (value instanceof SpecialNode)
           return value.toString();
         else
           return value;

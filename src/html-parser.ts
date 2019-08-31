@@ -1,62 +1,12 @@
 import { processMillis } from './util';
+import { FORMATTING_ELEMENTS, MARKER_ELEMENTS, VOID_ELEMENTS } from './element-info';
+import { fixBadChars, isAttributeNameChar, isMarkupStart, isPCENChar, isWhiteSpace } from './character-info';
+import { Comment, Declaration, DomNode, ProcessingInstruction } from './dom';
 
 export interface HtmlParserOptions {
   eol?: string;
   fixBadChars?: boolean;
 }
-
-export class Comment {
-  constructor(public text: string) {}
-
-  toString(): string {
-    return '<!--' + this.text + '-->';
-  }
-}
-
-export class Declaration {
-  constructor(public text: string) {}
-
-  toString(): string {
-    return '<!' + this.text + '>';
-  }
-}
-
-export class ProcessingInstruction {
-  constructor(public text: string) {}
-
-  toString(): string {
-    return '<?' + this.text + '>';
-  }
-}
-
-type DomChild = DomNode | string | Comment | Declaration | ProcessingInstruction;
-
-export class DomNode {
-  attributes: string[];
-  values: Record<string, string>;
-  children: DomChild[];
-
-  constructor(public tag: string) {}
-
-  addAttribute(name: string, value: string): void {
-    this.attributes = this.attributes || [];
-    this.attributes.push(name);
-    this.values = this.values || {};
-    this.values[name] = value;
-  }
-
-  addChild(child: DomChild, leadingSpace?: string): void {
-    this.children = this.children || [];
-
-    if (this.children.length > 0 && typeof this.children[this.children.length - 1] === 'string')
-      this.children[this.children.length - 1] += leadingSpace;
-
-    this.children.push(child);
-  }
-}
-
-const VOID_ELEMENTS = ['area', 'base', 'br',  'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param',
-                       'source', 'track', 'wbr', 'command', 'keygen', 'menuitem'];
 
 enum State {
   OUTSIDE_MARKUP,
@@ -93,58 +43,6 @@ type BasicCallback = (leadingSpace: string, text: string, trailing?: string) => 
 type EndCallback = (finalSpace?: string) => void;
 type ErrorCallback = (error: string, line?: number, column?: number, source?: string) => void;
 
-function isWhiteSpace(ch: string) {
-  return ch !== undefined && ch <= ' ';
-}
-
-function isMarkupStart(ch: string) {
-  return ch !== undefined && /[a-z\/!?]/i.test(ch);
-}
-
-const PCENCharRanges = new RegExp(
-  '[\xB7\xC0-\xD6\xD8-\xF6\xF8-\u037D\u037F-\u1FFF\u200C-\u200D\u203F-\u2040\u2070-\u218F' +
-  '\u2C00-\u2FEF\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD]'
-);
-
-function isPCENChar(ch: string) {
-  if (ch <= 'z')
-    return /[-._0-9a-z]/i.test(ch);
-  else if (ch.length === 1)
-    return PCENCharRanges.test(ch);
-
-  const cp = ch.codePointAt(0);
-
-  return 0x10000 <= cp && cp <= 0xEFFFF;
-}
-
-function isAttributeNameChar(ch: string): boolean {
-  return ch > ' ' && !/["`>/=]/.test(ch) && (ch < '0x7F' || ch >= '0xA0');
-}
-
-function fixBadChars(s: string): string {
-  s = s.replace(/</g, '&lt;');
-  s = s.replace(/>/g, '&gt;');
-
-  const parts = s.split('&');
-
-  if (parts.length > 1) {
-    s = parts.map((part, index) => {
-      if (index > 0) {
-        const $ = /^([a-z]+|#\d+|#x[0-9a-f]+)(;?)/i.exec(part);
-
-        if (!$)
-          part = 'amp;' + part;
-        else if (!$[2])
-          part = $[1] + ';' + part.substr($[1].length);
-      }
-
-      return part;
-    }).join('&');
-  }
-
-  return s;
-}
-
 export class HtmlParser {
   private callbackAttribute: AttributeCallback;
   private callbackCloseTag: BasicCallback;
@@ -158,10 +56,14 @@ export class HtmlParser {
   private callbackText: BasicCallback;
   private callbackUnhandled: BasicCallback;
 
+  private dom: DomNode = new DomNode('/');
+
+  private activeFormatting: DomNode[] = [];
   private attribute = '';
   private collectedSpace = '';
   private column = 0;
-  private dom: DomNode = new DomNode('/');
+  private currentNode = this.dom;
+  private currentFormatNode: DomNode;
   private domStack = [this.dom];
   private leadingSpace = '';
   private lineNumber  = 1;
@@ -174,6 +76,7 @@ export class HtmlParser {
   private state = State.OUTSIDE_MARKUP;
   private tagName = '';
   private yieldTime = DEFAULT_YIELD_TIME;
+  private xmlMode = false;
 
   constructor(
     private htmlSource: string,
@@ -269,8 +172,6 @@ export class HtmlParser {
     const startTime = processMillis();
 
     while ((ch = this.getNonSpace()) !== undefined) {
-      const parent = this.domStack[this.domStack.length - 1];
-
       switch (this.state) {
         case State.OUTSIDE_MARKUP:
           this.putBack(ch);
@@ -290,7 +191,7 @@ export class HtmlParser {
               this.callbackText(collected, text, '');
 
             this.pendingSource = '';
-            parent.addChild(collected + text);
+            this.currentNode.addChild(collected + text);
           }
 
           this.state = State.AT_MARKUP_START;
@@ -332,8 +233,8 @@ export class HtmlParser {
             this.callbackUnhandled(this.collectedSpace, '<' + this.tagName);
 
           node = new DomNode(this.tagName);
-          parent.addChild(node, this.collectedSpace);
-          this.domStack.push(node);
+          this.currentNode.addChild(node, this.collectedSpace);
+          this.pushStack(node);
           this.collectedSpace = '';
           this.pendingSource = '';
           this.state = State.AT_ATTRIBUTE_START;
@@ -353,9 +254,7 @@ export class HtmlParser {
           }
           else {
             this.doCloseTagCallback(this.leadingSpace, this.tagName, this.collectedSpace);
-
-            if (parent.tag === this.tagName)
-              this.domStack.pop();
+            this.popStack(this.tagName);
           }
         break;
 
@@ -393,8 +292,8 @@ export class HtmlParser {
             this.collectedSpace = '';
             this.pendingSource = '';
 
-            if (end.length > 1 || VOID_ELEMENTS.indexOf(this.tagName) >= 0) {
-              this.domStack.pop();
+            if (end.length > 1 ||  VOID_ELEMENTS.has(this.tagName)) {
+              this.popStack();
               this.state = State.OUTSIDE_MARKUP;
             }
             else if (this.tagName === 'script')
@@ -416,7 +315,7 @@ export class HtmlParser {
           else {
             this.doAttributeCallback();
             this.putBack(ch);
-            parent.addAttribute(this.attribute, '');
+            this.currentNode.addAttribute(this.attribute, '');
             this.state = State.AT_ATTRIBUTE_START;
           }
         break;
@@ -424,7 +323,7 @@ export class HtmlParser {
         case State.AT_ATTRIBUTE_VALUE:
           if (ch === '>') {
             this.doAttributeCallback(this.preEqualsSpace + '=');
-            parent.addAttribute(this.attribute, '');
+            this.currentNode.addAttribute(this.attribute, '');
             this.putBack(ch);
           }
           else {
@@ -432,7 +331,7 @@ export class HtmlParser {
             const value = this.gatherAttributeValue(quote, quote ? '' : ch);
 
             this.doAttributeCallback(this.preEqualsSpace + '=' + this.collectedSpace, value, quote);
-            parent.addAttribute(this.attribute, value);
+            this.currentNode.addAttribute(this.attribute, value);
             this.collectedSpace = '';
           }
 
@@ -462,7 +361,7 @@ export class HtmlParser {
 
           this.collectedSpace = '';
           this.pendingSource = '';
-          parent.addChild(new Declaration(content), this.leadingSpace);
+          this.currentNode.addChild(new Declaration(content), this.leadingSpace);
           this.leadingSpace = '';
           this.state = State.OUTSIDE_MARKUP;
         break;
@@ -477,9 +376,14 @@ export class HtmlParser {
           else if (this.callbackUnhandled)
             this.callbackUnhandled(this.leadingSpace, '<?' + content + '>');
 
+          if (content.startsWith('xml ') && this.domStack.length === 1 &&
+              this.dom.children.length === 0 ||
+              (this.dom.children.length === 1 && this.dom.children[0].toString().trim() === ''))
+            this.xmlMode = true;
+
           this.collectedSpace = '';
           this.pendingSource = '';
-          parent.addChild(new ProcessingInstruction(content), this.leadingSpace);
+          this.currentNode.addChild(new ProcessingInstruction(content), this.leadingSpace);
           this.leadingSpace = '';
           this.state = State.OUTSIDE_MARKUP;
         break;
@@ -496,7 +400,7 @@ export class HtmlParser {
 
           this.collectedSpace = '';
           this.pendingSource = '';
-          parent.addChild(new Comment(content), this.leadingSpace);
+          this.currentNode.addChild(new Comment(content), this.leadingSpace);
           this.leadingSpace = '';
           this.state = State.OUTSIDE_MARKUP;
         break;
@@ -527,13 +431,13 @@ export class HtmlParser {
 
               this.collectedSpace = '';
               this.pendingSource = '';
-              parent.addChild(content);
+              this.currentNode.addChild(content);
             }
 
             const $$ = new RegExp('^<\\/(' + tag + ')(\\s*)>$', 'i').exec(closeTag);
 
             this.doCloseTagCallback('', $$[1], $$[2]);
-            this.domStack.pop();
+            this.  popStack();
           }
         break;
       }
@@ -551,6 +455,35 @@ export class HtmlParser {
 
     if (this.parsingResolver)
       this.parsingResolver(this.dom);
+  }
+
+  private pushStack(node: DomNode): void {
+    this.domStack.push(node);
+    this.currentNode = node;
+
+    if (FORMATTING_ELEMENTS.has(node.tag) || MARKER_ELEMENTS.has(node.tag)) {
+      this.activeFormatting.push(node);
+      this.currentFormatNode = node;
+    }
+  }
+
+  private popStack(tag?: string): void {
+    if (!tag || this.currentNode.tag === tag) {
+      this.domStack.pop();
+
+      if (this.currentFormatNode && this.currentFormatNode.tag === tag) {
+        this.activeFormatting.pop();
+        this.currentFormatNode = this.activeFormatting[this.activeFormatting.length - 1];
+      }
+    }
+    else if (tag && FORMATTING_ELEMENTS.has(tag)) {
+      const formatNode = this.currentFormatNode;
+
+      while (formatNode && !MARKER_ELEMENTS.has(tag)) {
+      }
+    }
+
+    this.currentNode = this.domStack[this.domStack.length - 1] || this.dom;
   }
 
   private reportError(message: string) {

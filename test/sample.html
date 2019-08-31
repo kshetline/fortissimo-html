@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang=en>
 <head>
   <title>Sample HTML</title>
   <meta charset="UTF-8">
@@ -50,7 +50,7 @@
 </head>
 <body>
   <p>One</p>
-  <p>Two</p>
+  <p>Two
   <p>Three</p>
   <? an ignored processing instruction >
   <! -- not a comment >
@@ -58,13 +58,13 @@
     <div class='outer-wrapper'>
       <div class="sizer">&nbsp;</div>
       <!-- Forced error! -->
-      <div class="inner-wrapper" foo/bar="baz">
+      <div class="inner-wrapper">
         <div class="content">
           <ul>
             <li>One</li>
-            <li>thing</li>
+            <li>thing
             <li>after</li>
-            <li>another</li>
+            <li>another
             <li>after</li>
             <li>another</li>
           </ul>
@@ -74,6 +74,16 @@
   </div>
   <br/>
   <br>
+  <p>Foo
+  <p>Bar
+  <!-- <p>Overlapping <i>nesting <b>of </i>tags</b></p> -->
+  <table>
+    <caption>A Table
+    <th>foo
+    <tbody>
+    <tr><td>4<td>5
+    <tr><td>6<td>7
+  </table>
   <textarea rows=10 cols=80 spellcheck=false>
 Attempts <b>at formatting</b> should be <i>ignored</i> here, with markup
 taken as literal text. &amp; yet, entities will get parsed - &szlig;!
