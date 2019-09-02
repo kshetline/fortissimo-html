@@ -1,7 +1,7 @@
 import { processMillis } from './util';
-import { FORMATTING_ELEMENTS, MARKER_ELEMENTS, VOID_ELEMENTS } from './element-info';
-import { fixBadChars, isAttributeNameChar, isMarkupStart, isPCENChar, isWhiteSpace } from './character-info';
-import { Comment, Declaration, DomNode, ProcessingInstruction } from './dom';
+import { VOID_ELEMENTS } from './elements';
+import { fixBadChars, isAttributeNameChar, isMarkupStart, isPCENChar, isWhiteSpace } from './characters';
+import { Comment, Declaration, DomModel, DomNode, ProcessingInstruction } from './dom';
 
 export interface HtmlParserOptions {
   eol?: string;
@@ -56,15 +56,12 @@ export class HtmlParser {
   private callbackText: BasicCallback;
   private callbackUnhandled: BasicCallback;
 
-  private dom: DomNode = new DomNode('/');
-
-  private activeFormatting: DomNode[] = [];
   private attribute = '';
   private collectedSpace = '';
   private column = 0;
-  private currentNode = this.dom;
-  private currentFormatNode: DomNode;
-  private domStack = [this.dom];
+  private currentTag = '';
+  private currentTagLc = '';
+  private dom = new DomModel();
   private leadingSpace = '';
   private lineNumber  = 1;
   readonly options: HtmlParserOptions;
@@ -74,7 +71,6 @@ export class HtmlParser {
   private putBacks: string[] = [];
   private srcIndex = 0;
   private state = State.OUTSIDE_MARKUP;
-  private tagName = '';
   private yieldTime = DEFAULT_YIELD_TIME;
   private xmlMode = false;
 
@@ -151,7 +147,7 @@ export class HtmlParser {
 
     this.parseLoop();
 
-    return this.dom;
+    return this.dom.getRoot();
   }
 
   async parseAsync(yieldTime = DEFAULT_YIELD_TIME): Promise<DomNode> {
@@ -191,7 +187,7 @@ export class HtmlParser {
               this.callbackText(collected, text, '');
 
             this.pendingSource = '';
-            this.currentNode.addChild(collected + text);
+            this.dom.addChild(collected + text);
           }
 
           this.state = State.AT_MARKUP_START;
@@ -228,13 +224,13 @@ export class HtmlParser {
           this.gatherTagName(ch);
 
           if (this.callbackOpenTagStart)
-            this.callbackOpenTagStart(this.collectedSpace, this.tagName);
+            this.callbackOpenTagStart(this.collectedSpace, this.currentTag);
           else if (this.callbackUnhandled)
-            this.callbackUnhandled(this.collectedSpace, '<' + this.tagName);
+            this.callbackUnhandled(this.collectedSpace, '<' + this.currentTag);
 
-          node = new DomNode(this.tagName);
-          this.currentNode.addChild(node, this.collectedSpace);
-          this.pushStack(node);
+          node = new DomNode(this.currentTag);
+          this.dom.addChild(node, this.collectedSpace);
+          this.dom.push(node);
           this.collectedSpace = '';
           this.pendingSource = '';
           this.state = State.AT_ATTRIBUTE_START;
@@ -253,8 +249,8 @@ export class HtmlParser {
             break;
           }
           else {
-            this.doCloseTagCallback(this.leadingSpace, this.tagName, this.collectedSpace);
-            this.popStack(this.tagName);
+            this.doCloseTagCallback(this.leadingSpace, this.currentTag, this.collectedSpace);
+            this.dom.pop(this.currentTag);
           }
         break;
 
@@ -268,7 +264,7 @@ export class HtmlParser {
 
           if (ch !== '>') {
             if (end.length > 1) {
-              this.reportError(`Syntax error in <${this.tagName}>`);
+              this.reportError(`Syntax error in <${this.currentTag}>`);
               break;
             }
 
@@ -279,28 +275,28 @@ export class HtmlParser {
               this.state = State.AT_ATTRIBUTE_ASSIGNMENT;
             }
             else {
-              this.reportError(`Syntax error in <${this.tagName}>`);
+              this.reportError(`Syntax error in <${this.currentTag}>`);
               break;
             }
           }
           else {
             if (this.callbackOpenTagEnd)
-              this.callbackOpenTagEnd(this.collectedSpace, this.tagName, end);
+              this.callbackOpenTagEnd(this.collectedSpace, this.currentTag, end);
             else if (this.callbackUnhandled)
               this.callbackUnhandled(this.collectedSpace, end);
 
             this.collectedSpace = '';
             this.pendingSource = '';
 
-            if (end.length > 1 ||  VOID_ELEMENTS.has(this.tagName)) {
-              this.popStack();
+            if (end.length > 1 ||  VOID_ELEMENTS.has(this.currentTagLc)) {
+              this.dom.pop(null);
               this.state = State.OUTSIDE_MARKUP;
             }
-            else if (this.tagName === 'script')
+            else if (this.currentTagLc === 'script')
               this.state = State.IN_SCRIPT_ELEMENT;
-            else if (this.tagName === 'style')
+            else if (this.currentTagLc === 'style')
               this.state = State.IN_STYLE_ELEMENT;
-            else if (this.tagName === 'textarea')
+            else if (this.currentTagLc === 'textarea')
               this.state = State.IN_TEXT_AREA_ELEMENT;
             else
               this.state = State.OUTSIDE_MARKUP;
@@ -315,7 +311,7 @@ export class HtmlParser {
           else {
             this.doAttributeCallback();
             this.putBack(ch);
-            this.currentNode.addAttribute(this.attribute, '');
+            this.dom.addAttribute(this.attribute, '');
             this.state = State.AT_ATTRIBUTE_START;
           }
         break;
@@ -323,7 +319,7 @@ export class HtmlParser {
         case State.AT_ATTRIBUTE_VALUE:
           if (ch === '>') {
             this.doAttributeCallback(this.preEqualsSpace + '=');
-            this.currentNode.addAttribute(this.attribute, '');
+            this.dom.addAttribute(this.attribute, '');
             this.putBack(ch);
           }
           else {
@@ -331,7 +327,7 @@ export class HtmlParser {
             const value = this.gatherAttributeValue(quote, quote ? '' : ch);
 
             this.doAttributeCallback(this.preEqualsSpace + '=' + this.collectedSpace, value, quote);
-            this.currentNode.addAttribute(this.attribute, value);
+            this.dom.addAttribute(this.attribute, value);
             this.collectedSpace = '';
           }
 
@@ -361,7 +357,7 @@ export class HtmlParser {
 
           this.collectedSpace = '';
           this.pendingSource = '';
-          this.currentNode.addChild(new Declaration(content), this.leadingSpace);
+          this.dom.addChild(new Declaration(content), this.leadingSpace);
           this.leadingSpace = '';
           this.state = State.OUTSIDE_MARKUP;
         break;
@@ -376,14 +372,12 @@ export class HtmlParser {
           else if (this.callbackUnhandled)
             this.callbackUnhandled(this.leadingSpace, '<?' + content + '>');
 
-          if (content.startsWith('xml ') && this.domStack.length === 1 &&
-              this.dom.children.length === 0 ||
-              (this.dom.children.length === 1 && this.dom.children[0].toString().trim() === ''))
+          if (content.startsWith('xml ') && this.dom.canStillAcceptXml())
             this.xmlMode = true;
 
           this.collectedSpace = '';
           this.pendingSource = '';
-          this.currentNode.addChild(new ProcessingInstruction(content), this.leadingSpace);
+          this.dom.addChild(new ProcessingInstruction(content), this.leadingSpace);
           this.leadingSpace = '';
           this.state = State.OUTSIDE_MARKUP;
         break;
@@ -400,7 +394,7 @@ export class HtmlParser {
 
           this.collectedSpace = '';
           this.pendingSource = '';
-          this.currentNode.addChild(new Comment(content), this.leadingSpace);
+          this.dom.addChild(new Comment(content), this.leadingSpace);
           this.leadingSpace = '';
           this.state = State.OUTSIDE_MARKUP;
         break;
@@ -431,13 +425,13 @@ export class HtmlParser {
 
               this.collectedSpace = '';
               this.pendingSource = '';
-              this.currentNode.addChild(content);
+              this.dom.addChild(content);
             }
 
             const $$ = new RegExp('^<\\/(' + tag + ')(\\s*)>$', 'i').exec(closeTag);
 
             this.doCloseTagCallback('', $$[1], $$[2]);
-            this.  popStack();
+            this.dom.pop();
           }
         break;
       }
@@ -454,36 +448,7 @@ export class HtmlParser {
     this.callbackEnd(this.collectedSpace);
 
     if (this.parsingResolver)
-      this.parsingResolver(this.dom);
-  }
-
-  private pushStack(node: DomNode): void {
-    this.domStack.push(node);
-    this.currentNode = node;
-
-    if (FORMATTING_ELEMENTS.has(node.tag) || MARKER_ELEMENTS.has(node.tag)) {
-      this.activeFormatting.push(node);
-      this.currentFormatNode = node;
-    }
-  }
-
-  private popStack(tag?: string): void {
-    if (!tag || this.currentNode.tag === tag) {
-      this.domStack.pop();
-
-      if (this.currentFormatNode && this.currentFormatNode.tag === tag) {
-        this.activeFormatting.pop();
-        this.currentFormatNode = this.activeFormatting[this.activeFormatting.length - 1];
-      }
-    }
-    else if (tag && FORMATTING_ELEMENTS.has(tag)) {
-      const formatNode = this.currentFormatNode;
-
-      while (formatNode && !MARKER_ELEMENTS.has(tag)) {
-      }
-    }
-
-    this.currentNode = this.domStack[this.domStack.length - 1] || this.dom;
+      this.parsingResolver(this.dom.getRoot());
   }
 
   private reportError(message: string) {
@@ -632,13 +597,14 @@ export class HtmlParser {
   }
 
   private gatherTagName(init = ''): void {
-    this.tagName = init;
+    this.currentTag = init;
 
     let ch: string;
 
     while (isPCENChar(ch = this.getChar()))
-      this.tagName += ch;
+      this.currentTag += ch;
 
+    this.currentTagLc = this.currentTag.toLowerCase();
     this.putBack(ch);
   }
 

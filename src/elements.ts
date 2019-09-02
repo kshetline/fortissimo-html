@@ -6,7 +6,7 @@ export const MARKER_ELEMENTS = new Set(['applet', 'object', 'marquee', 'template
 export const VOID_ELEMENTS = new Set(['area', 'base', 'br',  'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param',
                                'source', 'track', 'wbr', 'command', 'keygen', 'menuitem']);
 
-// FORM_TAGS, P_TAG, and OPEN_IMPLIES_CLOSE take from:
+// FORM_TAGS, P_TAG, and OPEN_IMPLIES_CLOSE taken from:
 // https://github.com/fb55/htmlparser2/blob/master/src/Parser.ts
 
 export const FORM_TAGS = new Set([
