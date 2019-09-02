@@ -40,7 +40,7 @@ const tagForState = {
 
 type AttributeCallback = (leadingSpace: string, name: string, equalSign: string, value: string, quote: string) => void;
 type BasicCallback = (leadingSpace: string, text: string, trailing?: string) => void;
-type EndCallback = (finalSpace?: string) => void;
+type EndCallback = (finalSpace?: string, dom?: DomNode, unclosedTagCount?: number) => void;
 type ErrorCallback = (error: string, line?: number, column?: number, source?: string) => void;
 
 export class HtmlParser {
@@ -229,6 +229,7 @@ export class HtmlParser {
             this.callbackUnhandled(this.collectedSpace, '<' + this.currentTag);
 
           node = new DomNode(this.currentTag);
+          this.dom.prePush(node);
           this.dom.addChild(node, this.collectedSpace);
           this.dom.push(node);
           this.collectedSpace = '';
@@ -250,7 +251,7 @@ export class HtmlParser {
           }
           else {
             this.doCloseTagCallback(this.leadingSpace, this.currentTag, this.collectedSpace);
-            this.dom.pop(this.currentTag);
+            this.dom.pop(this.currentTagLc);
           }
         break;
 
@@ -372,8 +373,10 @@ export class HtmlParser {
           else if (this.callbackUnhandled)
             this.callbackUnhandled(this.leadingSpace, '<?' + content + '>');
 
-          if (content.startsWith('xml ') && this.dom.canStillAcceptXml())
+          if (content.startsWith('xml ') && this.dom.canDoXmlMode()) {
             this.xmlMode = true;
+            this.dom.setXmlMode(true);
+          }
 
           this.collectedSpace = '';
           this.pendingSource = '';
@@ -445,7 +448,7 @@ export class HtmlParser {
     if (this.state !== State.OUTSIDE_MARKUP)
       this.callbackError('Unexpected end of file', this.lineNumber, this.column);
 
-    this.callbackEnd(this.collectedSpace);
+    this.callbackEnd(this.collectedSpace, this.dom.getRoot(), this.dom.getUnclosedTagCount());
 
     if (this.parsingResolver)
       this.parsingResolver(this.dom.getRoot());

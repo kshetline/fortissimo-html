@@ -1,4 +1,11 @@
-import { FORMATTING_ELEMENTS, MARKER_ELEMENTS } from './elements';
+import { FORMATTING_ELEMENTS, MARKER_ELEMENTS, OPEN_IMPLIES_CLOSE } from './elements';
+
+function last<T>(array: T[]): T {
+  if (array && array.length > 0)
+    return array[array.length - 1];
+  else
+    return undefined;
+}
 
 export enum ClosureState {
   UNCLOSED,
@@ -39,7 +46,7 @@ export class UnmatchedClosingTag extends SpecialNode {
   constructor(content: string) { super(content); }
 
   toString(): string {
-    return '</' + this.content + '>';
+    return '</' + this.content.toUpperCase() + '>';
   }
 }
 
@@ -50,12 +57,16 @@ export class DomNode {
   attributesLc: Record<string, string>;
   children: DomChild[];
   closureState = ClosureState.UNCLOSED;
+  synthetic?: boolean;
+  tagLc: string;
   values: Record<string, string>;
   valuesByLc: Record<string, string>;
-  tagLc: string;
 
-  constructor(public tag: string) {
+  constructor(public tag: string, synthetic?: boolean) {
     this.tagLc = tag.toLowerCase();
+
+    if (synthetic)
+      this.synthetic = true;
   }
 
   addAttribute(name: string, value: string): void {
@@ -106,6 +117,8 @@ export class DomModel {
   private currentFormatNode: DomNode;
   private currentNode = this.root;
   private domStack = [this.root];
+  private inTable = 0;
+  private xmlMode = false;
 
   getRoot(): DomNode {
     return this.root;
@@ -115,13 +128,42 @@ export class DomModel {
     this.currentNode.addAttribute(name, value);
   }
 
-  canStillAcceptXml(): boolean {
+  canDoXmlMode(): boolean {
     return this.domStack.length === 1 &&
            this.root.children.length === 0 ||
            (this.root.children.length === 1 && this.root.children[0].toString().trim() === '');
   }
 
-  addChild(child: DomChild, leadingSpace?: string): void {
+  setXmlMode(mode: boolean): void {
+    this.xmlMode = mode;
+  }
+
+  prePush(node: DomNode): void {
+    if (!this.xmlMode && node.tagLc in OPEN_IMPLIES_CLOSE) {
+      while (OPEN_IMPLIES_CLOSE[node.tagLc].has(this.currentNode.tagLc)) {
+        this.currentNode.closureState = ClosureState.IMPLICITLY_CLOSED;
+        this.domStack.pop();
+        this.updateCurrentNode();
+      }
+    }
+  }
+
+  addChild(child: DomChild, leadingSpace?: string, pending_th = false): void {
+    if (this.inTable > 0 && child instanceof DomNode && /^(td|th)$/.test(child.tagLc) && this.currentNode.tagLc !== 'tr') {
+      const newParent = new DomNode('tr', true);
+
+      this.addChild(newParent, '', child.tagLc === 'th');
+      this.domStack.push(newParent);
+      this.currentNode = newParent;
+    }
+    else if (this.inTable > 0 && child instanceof DomNode && child.tagLc === 'tr' &&  !/^(tbody|thead|table)$/.test(this.currentNode.tagLc)) {
+      const newParent = new DomNode(pending_th ? 'thead' : 'tbody', true);
+
+      this.addChild(newParent);
+      this.domStack.push(newParent);
+      this.currentNode = newParent;
+    }
+
     this.currentNode.addChild(child, leadingSpace);
   }
 
@@ -129,33 +171,64 @@ export class DomModel {
     this.domStack.push(node);
     this.currentNode = node;
 
-    if (FORMATTING_ELEMENTS.has(node.tag) || MARKER_ELEMENTS.has(node.tag)) {
+    if (node.tagLc === 'table')
+      ++this.inTable;
+
+    if (FORMATTING_ELEMENTS.has(node.tagLc) || MARKER_ELEMENTS.has(node.tagLc)) {
       this.activeFormatting.push(node);
       this.currentFormatNode = node;
     }
   }
 
-  pop(tag?: string): void {
-    if (!tag || this.currentNode.tag === tag) {
+  pop(tagLc?: string): void {
+    if (!tagLc || this.currentNode.tagLc === tagLc) {
       this.domStack.pop();
 
-      if (tag === null)
+      if (tagLc === 'table')
+        --this.inTable;
+
+      if (tagLc === null)
         this.currentNode.closureState = ClosureState.SELF_CLOSED;
       else
         this.currentNode.closureState = ClosureState.EXPLICITLY_CLOSED;
 
-      if (this.currentFormatNode && this.currentFormatNode.tag === tag) {
+      if (this.currentFormatNode && this.currentFormatNode.tagLc === tagLc) {
         this.activeFormatting.pop();
-        this.currentFormatNode = this.activeFormatting[this.activeFormatting.length - 1];
+        this.currentFormatNode = last(this.activeFormatting);
       }
     }
-    else if (tag && FORMATTING_ELEMENTS.has(tag)) {
+    else if (FORMATTING_ELEMENTS.has(tagLc)) {
       const formatNode = this.currentFormatNode;
 
-      while (formatNode && !MARKER_ELEMENTS.has(tag)) {
+      while (formatNode && !MARKER_ELEMENTS.has(tagLc)) {
       }
     }
+    else {
+      const nodeIndex = this.domStack.map(node => node.tagLc).lastIndexOf(tagLc);
 
-    this.currentNode = this.domStack[this.domStack.length - 1] || this.root;
+      if (nodeIndex > 0) { // No, not >= 0, on purpose!
+        while (this.domStack.length > nodeIndex) {
+          this.currentNode.closureState = ClosureState.IMPLICITLY_CLOSED;
+          this.domStack.pop();
+
+          if (this.currentNode.tagLc === 'table')
+            --this.inTable;
+
+          this.updateCurrentNode();
+        }
+      }
+      else
+        this.addChild(new UnmatchedClosingTag(tagLc));
+    }
+
+    this.updateCurrentNode();
+  }
+
+  getUnclosedTagCount(): number {
+    return Math.max(this.domStack.length - 1, 0);
+  }
+
+  private updateCurrentNode(): void {
+    this.currentNode = last(this.domStack) || this.root;
   }
 }

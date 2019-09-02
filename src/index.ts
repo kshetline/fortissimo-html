@@ -45,7 +45,7 @@ function processFile(file: string) {
         console.log('declaration:', '<!' + declaration + '>');
         rebuilt += leading + '<!' + declaration + '>';
       })
-      .onEnd(trailing => {
+      .onEnd((trailing, domRoot, unclosed) => {
         rebuilt += trailing;
 
         const totalTime = processMillis() - startTime;
@@ -54,6 +54,7 @@ function processFile(file: string) {
 
         console.log('*** Finished in %s msec (%s MB/sec)', totalTime.toFixed(1), speed.toFixed(2));
         console.log('*** output matches input: ' + (rebuilt === content));
+        console.log('*** unclosed tags: ' + unclosed);
       })
       .onError((error, line, col, source) => {
         console.error('*** %s ***\n***%s: [%s, %s]', source, error, line, col);

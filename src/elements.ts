@@ -6,7 +6,7 @@ export const MARKER_ELEMENTS = new Set(['applet', 'object', 'marquee', 'template
 export const VOID_ELEMENTS = new Set(['area', 'base', 'br',  'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param',
                                'source', 'track', 'wbr', 'command', 'keygen', 'menuitem']);
 
-// FORM_TAGS, P_TAG, and OPEN_IMPLIES_CLOSE taken from:
+// FORM_TAGS, P_TAG, and OPEN_IMPLIES_CLOSE were taken from (then modified slightly):
 // https://github.com/fb55/htmlparser2/blob/master/src/Parser.ts
 
 export const FORM_TAGS = new Set([
@@ -19,12 +19,12 @@ export const FORM_TAGS = new Set([
     'textarea'
 ]);
 
-export const P_TAG = new Set(['p']);
+const P_TAG = new Set(['p']);
 
-export const OPEN_IMPLIES_CLOSE = {
-    tr: new Set(['tr', 'th', 'td']),
-    th: new Set(['th']),
-    td: new Set(['thead', 'th', 'td']),
+export const OPEN_IMPLIES_CLOSE: Record<string, Set<string>> = {
+    tr: new Set(['tr', 'th', 'td', 'caption']),
+    th: new Set(['th', 'caption']),
+    td: new Set(['thead', 'th', 'td', 'caption']),
     body: new Set(['head', 'link', 'script']),
     li: new Set(['li']),
     p: P_TAG,
@@ -67,6 +67,6 @@ export const OPEN_IMPLIES_CLOSE = {
     ul: P_TAG,
     rt: new Set(['rt', 'rp']),
     rp: new Set(['rt', 'rp']),
-    tbody: new Set(['thead', 'tbody']),
-    tfoot: new Set(['thead', 'tbody'])
+    tbody: new Set(['thead', 'tbody', 'caption', 'tr', 'td', 'th']),
+    tfoot: new Set(['thead', 'tbody', 'caption', 'tr', 'td', 'th'])
 };
