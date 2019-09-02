@@ -14,11 +14,25 @@ export enum ClosureState {
   IMPLICITLY_CLOSED
 }
 
-export abstract class SpecialNode {
+export abstract class DomElement {
+  parent: DomNode;
+
   protected constructor(public content: string) {}
+
+  getDepth(): number {
+    let depth = -1;
+    let node = this.parent;
+
+    while (node) {
+      ++depth;
+      node = node.parent;
+    }
+
+    return depth;
+  }
 }
 
-export class Comment extends SpecialNode {
+export class CommentElement extends DomElement {
   constructor(content: string) { super(content); }
 
   toString(): string {
@@ -26,7 +40,7 @@ export class Comment extends SpecialNode {
   }
 }
 
-export class Declaration extends SpecialNode {
+export class DeclarationElement extends DomElement {
   constructor(content: string) { super(content); }
 
   toString(): string {
@@ -34,7 +48,7 @@ export class Declaration extends SpecialNode {
   }
 }
 
-export class ProcessingInstruction extends SpecialNode {
+export class ProcessingElement extends DomElement {
   constructor(content: string) { super(content); }
 
   toString(): string {
@@ -42,7 +56,15 @@ export class ProcessingInstruction extends SpecialNode {
   }
 }
 
-export class UnmatchedClosingTag extends SpecialNode {
+export class TextElement extends DomElement {
+  constructor(content: string) { super(content); }
+
+  toString(): string {
+    return this.content;
+  }
+}
+
+export class UnmatchedClosingTag extends DomElement {
   constructor(content: string) { super(content); }
 
   toString(): string {
@@ -50,12 +72,10 @@ export class UnmatchedClosingTag extends SpecialNode {
   }
 }
 
-export type DomChild = DomNode | string | SpecialNode;
-
-export class DomNode {
+export class DomNode extends DomElement {
   attributes: string[];
   attributesLc: Record<string, string>;
-  children: DomChild[];
+  children: DomElement[];
   closureState = ClosureState.UNCLOSED;
   synthetic?: boolean;
   tagLc: string;
@@ -63,6 +83,7 @@ export class DomNode {
   valuesByLc: Record<string, string>;
 
   constructor(public tag: string, synthetic?: boolean) {
+    super(null);
     this.tagLc = tag.toLowerCase();
 
     if (synthetic)
@@ -82,13 +103,14 @@ export class DomNode {
     this.values[nameLc] = value;
   }
 
-  addChild(child: DomChild, leadingSpace?: string): void {
+  addChild(child: DomElement, leadingSpace?: string): void {
     this.children = this.children || [];
 
-    if (this.children.length > 0 && typeof this.children[this.children.length - 1] === 'string')
-      this.children[this.children.length - 1] += leadingSpace;
+    if (this.children.length > 0 && this.children[this.children.length - 1] instanceof TextElement)
+      this.children[this.children.length - 1].content += leadingSpace;
 
     this.children.push(child);
+    child.parent = this;
   }
 
   matches(node: DomNode): boolean {
@@ -134,6 +156,10 @@ export class DomModel {
            (this.root.children.length === 1 && this.root.children[0].toString().trim() === '');
   }
 
+  getDepth(): number {
+    return this.domStack.length - 2;
+  }
+
   setXmlMode(mode: boolean): void {
     this.xmlMode = mode;
   }
@@ -148,7 +174,7 @@ export class DomModel {
     }
   }
 
-  addChild(child: DomChild, leadingSpace?: string, pending_th = false): void {
+  addChild(child: DomElement, leadingSpace?: string, pending_th = false): void {
     if (this.inTable > 0 && child instanceof DomNode && /^(td|th)$/.test(child.tagLc) && this.currentNode.tagLc !== 'tr') {
       const newParent = new DomNode('tr', true);
 
@@ -220,6 +246,9 @@ export class DomModel {
       else
         this.addChild(new UnmatchedClosingTag(tagLc));
     }
+
+    if (this.domStack.length === 0)
+      this.domStack.push(this.root);
 
     this.updateCurrentNode();
   }

@@ -2,7 +2,7 @@ import commander from 'commander';
 import fg from 'fast-glob';
 import fs from 'fs';
 
-import { SpecialNode } from './dom';
+import { DomElement } from './dom';
 import { HtmlParser } from './html-parser';
 import { processMillis } from './util';
 
@@ -33,16 +33,16 @@ function processFile(file: string) {
         console.log('attribute:', name + equals.trim() + quote + value + quote);
         rebuilt += leading + name + equals + quote + value + quote;
       })
-      .onCloseTag((leading, tag, trailing) => {
-        console.log('close:', '</' + tag + trailing + '>');
+      .onCloseTag((depth, leading, tag, trailing) => {
+        console.log('close:', '</' + tag + trailing + '>' + ' (' + depth + ')');
         rebuilt += leading + '</' + tag + trailing + '>';
       })
-      .onComment((leading, comment) => {
-        console.log('comment:', comment);
+      .onComment((depth, leading, comment) => {
+        console.log('comment:', comment + ' (' + depth + ')');
         rebuilt += leading + '<!--' + comment + '-->';
       })
-      .onDeclaration((leading, declaration) => {
-        console.log('declaration:', '<!' + declaration + '>');
+      .onDeclaration((depth, leading, declaration) => {
+        console.log('declaration:', '<!' + declaration + '>' + ' (' + depth + ')');
         rebuilt += leading + '<!' + declaration + '>';
       })
       .onEnd((trailing, domRoot, unclosed) => {
@@ -60,30 +60,32 @@ function processFile(file: string) {
         console.error('*** %s ***\n***%s: [%s, %s]', source, error, line, col);
         rebuilt += source;
       })
-      .onOpenTagEnd((leading, tag, end) => {
-        console.log('tag end:', end);
+      .onOpenTagEnd((depth, leading, tag, end) => {
+        console.log('tag end:', end + ' (' + depth + ')');
         rebuilt += leading + end;
       })
-      .onOpenTagStart((leading, tag) => {
-        console.log('tag:', tag);
+      .onOpenTagStart((depth, leading, tag) => {
+        console.log('tag:', tag + ' (' + depth + ')');
         rebuilt += leading + '<' + tag;
       })
-      .onProcessing((leading, processing) => {
-        console.log('processing:', '<?' + processing + '>');
+      .onProcessing((depth, leading, processing) => {
+        console.log('processing:', '<?' + processing + '>' + ' (' + depth + ')');
         rebuilt += leading + '<?' + processing + '>';
       })
-      .onText((leading, text, trailing) => {
-        console.log('text:', leading + text + trailing);
+      .onText((depth, leading, text, trailing) => {
+        console.log('text:', leading + text + trailing + ' (' + depth + ')');
         rebuilt += leading + text + trailing;
       })
-      .onUnhandled((leading, text, trailing = '') => {
-        console.log('???:', leading + text + trailing);
+      .onUnhandled((depth, leading, text, trailing = '') => {
+        console.log('???:', leading + text + trailing + ' (' + depth + ')');
         rebuilt += leading + text + trailing;
       })
       .parse();
 
       console.log(JSON.stringify(dom, (name, value) => {
-        if (value instanceof SpecialNode)
+        if (name === 'parent')
+          return undefined;
+        else if (value instanceof DomElement && value.content !== null)
           return value.toString();
         else
           return value;
