@@ -19,7 +19,7 @@ export abstract class DomElement {
 
   protected constructor(public content: string) {}
 
-  getDepth(): number {
+  get depth(): number {
     let depth = -1;
     let node = this.parent;
 
@@ -29,6 +29,10 @@ export abstract class DomElement {
     }
 
     return depth;
+  }
+
+  toJSON(): any {
+    return this.toString() + ' (' + this.depth + ')';
   }
 }
 
@@ -104,6 +108,38 @@ export class DomNode extends DomElement {
     this.children.push(child);
     child.parent = this;
   }
+
+  partialClone(synthetic?: boolean): DomNode {
+    const clone = new DomNode(this.tag, synthetic || this.synthetic);
+
+    clone.attributes = this.attributes && this.attributes.slice(0);
+
+    if (this.values)
+      clone.values = Object.assign({}, this.values);
+
+    return clone;
+  }
+
+  toJSON(): any {
+    const json: any = { tag: this.tag };
+
+    if (this.synthetic)
+      json.synthetic = true;
+
+    if (this.content)
+      json.content = this.content;
+
+    json.depth = this.depth;
+    json.closureState = this.closureState;
+
+    if (this.values)
+      json.value = this.values;
+
+    if (this.children)
+      json.children = this.children;
+
+    return json;
+  }
 }
 
 export class DomModel {
@@ -149,6 +185,8 @@ export class DomModel {
   }
 
   addChild(child: DomElement, leadingSpace?: string, pending_th = false): void {
+    this.reconstructFormattingIfNeeded();
+
     if (this.inTable > 0 && child instanceof DomNode && /^(td|th)$/.test(child.tagLc) && this.currentNode.tagLc !== 'tr') {
       const newParent = new DomNode('tr', true);
 
@@ -167,7 +205,46 @@ export class DomModel {
     this.currentNode.addChild(child, leadingSpace);
   }
 
+  private reconstructFormattingIfNeeded(): void {
+    // Adapted from https://html.spec.whatwg.org/multipage/parsing.html#reconstruct-the-active-formatting-elements.
+
+    if (this.currentFormatting.length === 0)
+      return;
+
+    let entryIndex = this.currentFormatting.length - 1;
+    let entry = this.currentFormatting[entryIndex];
+    let skipAdvance = false;
+
+    if (MARKER_ELEMENTS.has(entry.tagLc) || this.openStack.indexOf(entry) >= 0)
+      return;
+
+    do {
+      if (entryIndex === 0) {
+        skipAdvance = true;
+        break;
+      }
+
+      entry = this.currentFormatting[--entryIndex];
+    } while (!MARKER_ELEMENTS.has(entry.tagLc) && this.openStack.indexOf(entry) < 0);
+
+    do {
+      if (skipAdvance)
+        skipAdvance = false;
+      else {
+        entry = this.currentFormatting[++entryIndex];
+      }
+
+      entry = entry.partialClone(true);
+      last(this.openStack).addChild(entry);
+      this.openStack.push(entry);
+      this.currentNode = entry;
+      this.currentFormatting[entryIndex] = entry;
+    } while (entryIndex < this.currentFormatting.length - 1);
+  }
+
   push(node: DomNode): void {
+    this.reconstructFormattingIfNeeded();
+
     this.openStack.push(node);
     this.currentNode = node;
 
@@ -339,12 +416,15 @@ export class DomModel {
             fosterParent.children.splice(insertionIndex, 0, lastNode);
             lastNode.parent = fosterParent;
           }
+
+          lastNode.parent = fosterParent;
         }
         else
           commonAncestor.addChild(lastNode);
 
         newElem = new DomNode(tagLc, true);
         newElem.children = furthestBlock.children;
+        newElem.children.forEach(child => child.parent = newElem);
         furthestBlock.children = [newElem];
         newElem.parent = furthestBlock;
 
@@ -372,19 +452,33 @@ export class DomModel {
     if (!popped && !unmatched) {
       const nodeIndex = this.openStack.map(node => node.tagLc).lastIndexOf(tagLc);
 
-      if (nodeIndex > 0) { // No, not >= 0, on purpose!
+      if (nodeIndex > 0) { // No, I really don't want >= 0.
+        if (FORMATTING_ELEMENTS.has(tagLc)) {
+          for (let i = this.currentFormatting.length - 1; i >= 0; --i) {
+            const node = this.currentFormatting[i];
+
+            if (node.tagLc === tagLc) {
+              this.currentFormatting.splice(i, 1);
+              break;
+            }
+            else if (MARKER_ELEMENTS.has(node.tagLc))
+              break;
+          }
+        }
+        else if (MARKER_ELEMENTS.has(tagLc)) {
+          for (let i = this.currentFormatting.length - 1; i >= 0; --i) {
+            const node = this.currentFormatting[i];
+
+            if (node.tagLc === tagLc) {
+              this.currentFormatting.splice(i, this.currentFormatting.length - i);
+              break;
+            }
+          }
+        }
+
         while (this.openStack.length > nodeIndex) {
           this.currentNode.closureState = ClosureState.IMPLICITLY_CLOSED;
           this.openStack.pop();
-
-          if (this.currentFormatElem && this.currentFormatElem.tagLc === this.currentNode.tagLc) {
-            this.currentFormatting.pop();
-            this.currentFormatElem = last(this.currentFormatting);
-          }
-
-          if (this.currentNode.tagLc === 'table')
-            --this.inTable;
-
           this.updateCurrentNode();
         }
       }
@@ -398,7 +492,12 @@ export class DomModel {
     this.updateCurrentNode();
 
     this.inTable = 0;
-    this.openStack.forEach(node => this.inTable += (node.tagLc === 'table' ? 1 : 0));
+    this.openStack.forEach((node, index) => {
+      this.inTable += (node.tagLc === 'table' ? 1 : 0);
+
+      if (index > 0)
+        node.parent = this.openStack[index - 1];
+    });
   }
 
   getUnclosedTagCount(): number {
