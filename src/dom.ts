@@ -1,4 +1,4 @@
-import { FORMATTING_ELEMENTS, MARKER_ELEMENTS, OPEN_IMPLIES_CLOSE } from './elements';
+import { FORMATTING_ELEMENTS, FOSTER_PARENT_SPECIAL_TARGETS, MARKER_ELEMENTS, OPEN_IMPLIES_CLOSE, SCOPE_ELEMENTS, SPECIAL_ELEMENTS } from './elements';
 
 function last<T>(array: T[]): T {
   if (array && array.length > 0)
@@ -74,13 +74,11 @@ export class UnmatchedClosingTag extends DomElement {
 
 export class DomNode extends DomElement {
   attributes: string[];
-  attributesLc: Record<string, string>;
   children: DomElement[];
   closureState = ClosureState.UNCLOSED;
   synthetic?: boolean;
   tagLc: string;
   values: Record<string, string>;
-  valuesByLc: Record<string, string>;
 
   constructor(public tag: string, synthetic?: boolean) {
     super(null);
@@ -91,55 +89,31 @@ export class DomNode extends DomElement {
   }
 
   addAttribute(name: string, value: string): void {
-    const nameLc = name.toLowerCase();
-
     this.attributes = this.attributes || [];
     this.attributes.push(name);
-    this.attributesLc = this.attributesLc || {};
-    this.attributesLc[name] = nameLc;
     this.values = this.values || {};
     this.values[name] = value;
-    this.valuesByLc = this.valuesByLc || {};
-    this.values[nameLc] = value;
   }
 
   addChild(child: DomElement, leadingSpace?: string): void {
     this.children = this.children || [];
 
     if (this.children.length > 0 && this.children[this.children.length - 1] instanceof TextElement)
-      this.children[this.children.length - 1].content += leadingSpace;
+      this.children[this.children.length - 1].content += leadingSpace || '';
 
     this.children.push(child);
     child.parent = this;
-  }
-
-  matches(node: DomNode): boolean {
-    if (!node || this.tagLc !== node.tagLc)
-      return false;
-    else if ((!node.attributes || node.attributes.length === 0) && (!this.attributes || this.attributes.length === 0))
-      return true;
-    else if (node.attributes.length !== this.attributes.length)
-      return false;
-
-    for (const attrib of node.attributes) {
-      const attribLc = node.attributesLc[attrib];
-
-      if (node.valuesByLc[attribLc] !== this.valuesByLc[attribLc])
-        return false;
-    }
-
-    return true;
   }
 }
 
 export class DomModel {
   private root: DomNode = new DomNode('/');
 
-  private activeFormatting: DomNode[] = [];
-  private currentFormatNode: DomNode;
+  private currentFormatElem: DomNode;
+  private currentFormatting: DomNode[] = [];
   private currentNode = this.root;
-  private domStack = [this.root];
   private inTable = 0;
+  private openStack = [this.root];
   private xmlMode = false;
 
   getRoot(): DomNode {
@@ -151,13 +125,13 @@ export class DomModel {
   }
 
   canDoXmlMode(): boolean {
-    return this.domStack.length === 1 &&
+    return this.openStack.length === 1 &&
            this.root.children.length === 0 ||
            (this.root.children.length === 1 && this.root.children[0].toString().trim() === '');
   }
 
   getDepth(): number {
-    return this.domStack.length - 2;
+    return this.openStack.length - 2;
   }
 
   setXmlMode(mode: boolean): void {
@@ -168,7 +142,7 @@ export class DomModel {
     if (!this.xmlMode && node.tagLc in OPEN_IMPLIES_CLOSE) {
       while (OPEN_IMPLIES_CLOSE[node.tagLc].has(this.currentNode.tagLc)) {
         this.currentNode.closureState = ClosureState.IMPLICITLY_CLOSED;
-        this.domStack.pop();
+        this.openStack.pop();
         this.updateCurrentNode();
       }
     }
@@ -179,14 +153,14 @@ export class DomModel {
       const newParent = new DomNode('tr', true);
 
       this.addChild(newParent, '', child.tagLc === 'th');
-      this.domStack.push(newParent);
+      this.openStack.push(newParent);
       this.currentNode = newParent;
     }
     else if (this.inTable > 0 && child instanceof DomNode && child.tagLc === 'tr' &&  !/^(tbody|thead|table)$/.test(this.currentNode.tagLc)) {
       const newParent = new DomNode(pending_th ? 'thead' : 'tbody', true);
 
       this.addChild(newParent);
-      this.domStack.push(newParent);
+      this.openStack.push(newParent);
       this.currentNode = newParent;
     }
 
@@ -194,48 +168,219 @@ export class DomModel {
   }
 
   push(node: DomNode): void {
-    this.domStack.push(node);
+    this.openStack.push(node);
     this.currentNode = node;
 
     if (node.tagLc === 'table')
       ++this.inTable;
 
     if (FORMATTING_ELEMENTS.has(node.tagLc) || MARKER_ELEMENTS.has(node.tagLc)) {
-      this.activeFormatting.push(node);
-      this.currentFormatNode = node;
+      this.currentFormatting.push(node);
+      this.currentFormatElem = node;
     }
   }
 
-  pop(tagLc?: string): void {
-    if (!tagLc || this.currentNode.tagLc === tagLc) {
-      this.domStack.pop();
+  private getFormattingElement(tagLc: string): DomNode {
+    let formattingElem: DomNode;
 
-      if (tagLc === 'table')
-        --this.inTable;
+    for (let i = this.currentFormatting.length - 1; i >= 0; --i) {
+      const elem = this.currentFormatting[i];
+
+      if (elem.tagLc === tagLc) {
+        formattingElem = elem;
+        break;
+      }
+      else if (MARKER_ELEMENTS.has(elem.tagLc))
+        break;
+    }
+
+    if (!formattingElem && this.currentFormatting.length > 0 && this.currentFormatting[0].tagLc === tagLc)
+      return this.currentFormatting[0];
+    else
+      return formattingElem;
+  }
+
+  private isInScope(tagLc: string, scopeLimits: Set<string>): boolean {
+    for (let i = this.openStack.length - 1; i >= 0; --i) {
+      const elem = this.openStack[i];
+
+      if (elem.tagLc === tagLc)
+        return true;
+      else if (scopeLimits.has(elem.tagLc))
+        return false;
+    }
+
+    return false;
+  }
+
+  private getFurthestBlock(tagLc: string): DomNode {
+    let start: number;
+
+    for (start = this.openStack.length - 1; start >= 0 && this.openStack[start].tagLc !== tagLc; --start) {}
+
+    if (start < 0)
+      return undefined;
+
+    for (let i = start + 1; i < this.openStack.length; ++i) {
+      const elem = this.openStack[i];
+
+      if (SPECIAL_ELEMENTS.has(elem.tagLc))
+        return elem;
+    }
+
+    return undefined;
+  }
+
+  private getFosterParent(): [DomNode, number] {
+    let fosterParent: DomNode;
+    let insertionIndex = -1;
+
+    for (let i = this.openStack.length - 1; i > 0; --i) {
+      if (this.openStack[i].tagLc === 'table') {
+        fosterParent = this.openStack[i - 1];
+        insertionIndex = fosterParent.children.indexOf(this.openStack[i]);
+        break;
+      }
+    }
+
+    if (!fosterParent)
+      fosterParent = this.openStack.find(node => node.tagLc === 'html') || this.root;
+
+    return [fosterParent, insertionIndex];
+  }
+
+  pop(tagLc?: string): void {
+    let popped = false;
+    let unmatched = false;
+
+    if (!tagLc || this.currentNode.tagLc === tagLc) {
+      popped = true;
+      this.openStack.pop();
 
       if (tagLc === null)
         this.currentNode.closureState = ClosureState.SELF_CLOSED;
       else
         this.currentNode.closureState = ClosureState.EXPLICITLY_CLOSED;
 
-      if (this.currentFormatNode && this.currentFormatNode.tagLc === tagLc) {
-        this.activeFormatting.pop();
-        this.currentFormatNode = last(this.activeFormatting);
+      if (this.currentFormatElem && this.currentFormatElem.tagLc === tagLc) {
+        this.currentFormatting.pop();
+        this.currentFormatElem = last(this.currentFormatting);
       }
     }
     else if (FORMATTING_ELEMENTS.has(tagLc)) {
-      const formatNode = this.currentFormatNode;
+      // The following is adapted from https://html.spec.whatwg.org/multipage/parsing.html#adoptionAgency
+      let formatElem: DomNode;
+      let parseError = false;
 
-      while (formatNode && !MARKER_ELEMENTS.has(tagLc)) {
+      for (let i = 0; i < 8; ++i) {
+        formatElem = this.getFormattingElement(tagLc);
+
+        if (!formatElem)
+          break;
+        else if (this.openStack.indexOf(formatElem) < 0) {
+          this.currentFormatting.splice(this.currentFormatting.indexOf(formatElem), 1);
+          this.currentFormatElem = last(this.currentFormatting);
+          parseError = true;
+          unmatched = true;
+          break;
+        }
+        else if (!this.isInScope(tagLc, SCOPE_ELEMENTS)) {
+          parseError = true;
+          unmatched = true;
+          break;
+        }
+        else if (formatElem !== this.currentNode)
+          parseError = true;
+
+        const furthestBlock = this.getFurthestBlock(tagLc);
+
+        if (!furthestBlock)
+          break;
+
+        popped = true;
+
+        const commonAncestor = formatElem.parent;
+        let bookmark = this.currentFormatting.indexOf(formatElem);
+        let node = furthestBlock;
+        let lastNode = furthestBlock;
+        let nodeIndex: number;
+        let newElem: DomNode;
+
+        for (let j = 0; j < 3; ++j) {
+          node = node.parent;
+          nodeIndex = this.currentFormatting.indexOf(node);
+
+          if (nodeIndex < 0) {
+            this.openStack.splice(this.openStack.indexOf(node), 1);
+            continue;
+          }
+          else if (node === formatElem)
+            break;
+
+          newElem = new DomNode(tagLc, true);
+
+          this.currentFormatting[nodeIndex] = newElem;
+          this.openStack[this.openStack.indexOf(node)] = newElem;
+          node = newElem;
+
+          if (lastNode === furthestBlock)
+            bookmark = nodeIndex;
+
+          node.addChild(lastNode);
+          lastNode = node;
+        }
+
+        if (FOSTER_PARENT_SPECIAL_TARGETS.has(commonAncestor.tagLc)) {
+          const [fosterParent, insertionIndex] = this.getFosterParent();
+
+          if (insertionIndex < 0)
+            fosterParent.addChild(lastNode);
+          else {
+            fosterParent.children.splice(insertionIndex, 0, lastNode);
+            lastNode.parent = fosterParent;
+          }
+        }
+        else
+          commonAncestor.addChild(lastNode);
+
+        newElem = new DomNode(tagLc, true);
+        newElem.children = furthestBlock.children;
+        furthestBlock.children = [newElem];
+        newElem.parent = furthestBlock;
+
+        let formatElemIndex = this.currentFormatting.indexOf(formatElem);
+
+        if (bookmark === formatElemIndex)
+          this.currentFormatting[bookmark] = newElem;
+        else {
+          if (bookmark < formatElemIndex)
+            ++formatElemIndex;
+
+          this.currentFormatting.splice(bookmark, 0, newElem);
+          this.currentFormatting.splice(formatElemIndex, 1);
+        }
+
+        formatElemIndex = this.openStack.indexOf(formatElem);
+        this.openStack.splice(formatElemIndex, 1);
+
+        const furthestBlockIndex = this.openStack.indexOf(furthestBlock);
+
+        this.openStack.splice(furthestBlockIndex + 1, 0, newElem);
       }
     }
-    else {
-      const nodeIndex = this.domStack.map(node => node.tagLc).lastIndexOf(tagLc);
+
+    if (!popped && !unmatched) {
+      const nodeIndex = this.openStack.map(node => node.tagLc).lastIndexOf(tagLc);
 
       if (nodeIndex > 0) { // No, not >= 0, on purpose!
-        while (this.domStack.length > nodeIndex) {
+        while (this.openStack.length > nodeIndex) {
           this.currentNode.closureState = ClosureState.IMPLICITLY_CLOSED;
-          this.domStack.pop();
+          this.openStack.pop();
+
+          if (this.currentFormatElem && this.currentFormatElem.tagLc === this.currentNode.tagLc) {
+            this.currentFormatting.pop();
+            this.currentFormatElem = last(this.currentFormatting);
+          }
 
           if (this.currentNode.tagLc === 'table')
             --this.inTable;
@@ -247,17 +392,20 @@ export class DomModel {
         this.addChild(new UnmatchedClosingTag(tagLc));
     }
 
-    if (this.domStack.length === 0)
-      this.domStack.push(this.root);
+    if (this.openStack.length === 0)
+      this.openStack.push(this.root);
 
     this.updateCurrentNode();
+
+    this.inTable = 0;
+    this.openStack.forEach(node => this.inTable += (node.tagLc === 'table' ? 1 : 0));
   }
 
   getUnclosedTagCount(): number {
-    return Math.max(this.domStack.length - 1, 0);
+    return Math.max(this.openStack.length - 1, 0);
   }
 
   private updateCurrentNode(): void {
-    this.currentNode = last(this.domStack) || this.root;
+    this.currentNode = last(this.openStack) || this.root;
   }
 }
