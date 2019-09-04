@@ -34,7 +34,7 @@ export abstract class DomElement {
 
   // noinspection JSUnusedGlobalSymbols
   toJSON(): any {
-    return this.toString() + ' (' + this.depth + ')';
+    return this.toString() + ' (' + this.depth + (this.parent ? ', ' + this.parent.tag : '') + ')';
   }
 }
 
@@ -353,9 +353,154 @@ export class DomModel {
     return [fosterParent, insertionIndex];
   }
 
+  private invokeAdoptionAgency(tagLc: string): boolean[] {
+    // The following is adapted from https://html.spec.whatwg.org/multipage/parsing.html#adoptionAgency.
+    let formatElem: DomNode;
+    let popped = false;
+    let parseError = false;
+
+    // Steps 1 and 2 taken care of by earlier code in this method.
+    // Steps 3-5, "outer loop"
+    for (let i = 0; i < 8; ++i) {
+      // Step 6
+      formatElem = this.getFormattingElement(tagLc);
+
+      if (!formatElem)
+        break;
+      // Step 7
+      else if (this.openStack.indexOf(formatElem) < 0) {
+        this.currentFormatting.splice(this.currentFormatting.indexOf(formatElem), 1);
+        this.currentFormatElem = last(this.currentFormatting);
+        parseError = true;
+        break;
+      }
+      // Step 8
+      else if (!this.isInScope(tagLc, SCOPE_ELEMENTS)) {
+        parseError = true;
+        break;
+      }
+      // Step 9
+      else if (formatElem !== this.currentNode)
+        parseError = true;
+
+      // Step 10
+      const furthestBlock = this.getFurthestBlock(tagLc);
+
+      // Step 11
+      if (!furthestBlock)
+        break; // By leaving this loop, the details described for step 11 will be taken care of later.
+
+      popped = true;
+
+      // Step 12
+      const commonAncestor = formatElem.parent;
+      // Step 13
+      let bookmark = this.currentFormatting.indexOf(formatElem);
+      // Step 14
+      let node = furthestBlock;
+      let lastNode = furthestBlock;
+      let newElem: DomNode;
+
+      // Steps 14.1-14.2
+      for (let j = 1; ; ++j) {
+        // Step 14.3
+        node = node.parent;
+
+        // Step 14.4
+        if (node === formatElem)
+          break;
+
+        // Step 14.5
+        const nodeIndex = this.currentFormatting.indexOf(node);
+
+        if (j > 3 && nodeIndex >= 0)
+          this.currentFormatting.splice(nodeIndex, 1);
+        // Step 14.6
+        else if (nodeIndex < 0) {
+          const stackIndex = this.openStack.indexOf(node);
+
+          node.closureState = ClosureState.PROGRAMMATICALLY_CLOSED;
+          this.openStack.splice(stackIndex, 1);
+
+          if (stackIndex < this.openStack.length)
+            this.openStack[stackIndex].parent = this.openStack[stackIndex - 1];
+
+          continue;
+        }
+
+        // Step 14.7
+        newElem = formatElem.partialClone(true);
+        newElem.closureState = ClosureState.PROGRAMMATICALLY_CLOSED;
+
+        this.currentFormatting[nodeIndex] = newElem;
+        this.openStack[this.openStack.indexOf(node)] = newElem;
+        node = newElem;
+
+        // Step 14.8
+        if (lastNode === furthestBlock)
+          bookmark = nodeIndex;
+
+        // Steps 14.9-14.11
+        node.addChild(lastNode.detach());
+        lastNode = node;
+      }
+
+      // Step 15
+      if (FOSTER_PARENT_SPECIAL_TARGETS.has(commonAncestor.tagLc)) {
+        const [fosterParent, insertionIndex] = this.getFosterParent();
+
+        if (insertionIndex < 0)
+          fosterParent.addChild(lastNode);
+        else {
+          fosterParent.children.splice(insertionIndex, 0, lastNode);
+          lastNode.parent = fosterParent;
+        }
+
+        lastNode.parent = fosterParent;
+      }
+      else
+        commonAncestor.addChild(lastNode.detach());
+
+      // Step 16
+      newElem = formatElem.partialClone(true);
+      formatElem.closureState = ClosureState.PROGRAMMATICALLY_CLOSED;
+      // Step 17
+      newElem.children = furthestBlock.children;
+      newElem.children.forEach(child => child.parent = newElem);
+      // Step 18
+      furthestBlock.children = [newElem];
+      newElem.parent = furthestBlock;
+      newElem.closureState = ClosureState.PROGRAMMATICALLY_CLOSED;
+
+      // Step 19
+      let formatElemIndex = this.currentFormatting.indexOf(formatElem);
+
+      if (bookmark === formatElemIndex)
+        this.currentFormatting[bookmark] = newElem;
+      else {
+        if (bookmark < formatElemIndex)
+          ++formatElemIndex;
+
+        this.currentFormatting.splice(bookmark, 0, newElem);
+        this.currentFormatting.splice(formatElemIndex, 1);
+      }
+
+      // Step 20, part 1
+      formatElemIndex = this.openStack.indexOf(formatElem);
+      this.openStack.splice(formatElemIndex, 1);
+
+      // Implementing Step 20, part 2 ("...and insert the new element into the stack of open elements
+      // immediately below the position of *furthest block* in that stack.") causes problems in this
+      // implementation (and doesn't make a lot of sense), so it's been left out.
+
+      // Step 21 (loop back)
+    }
+
+    return [popped, parseError];
+  }
+
   pop(tagLc?: string): void {
     let popped = false;
-    let unmatched = false;
     let parseError = false;
 
     if (!tagLc || this.currentNode.tagLc === tagLc) {
@@ -372,114 +517,10 @@ export class DomModel {
         this.currentFormatElem = last(this.currentFormatting);
       }
     }
-    else if (FORMATTING_ELEMENTS.has(tagLc)) {
-      // The following is adapted from https://html.spec.whatwg.org/multipage/parsing.html#adoptionAgency.
-      let formatElem: DomNode;
+    else if (FORMATTING_ELEMENTS.has(tagLc))
+      [popped, parseError] = this.invokeAdoptionAgency(tagLc);
 
-      for (let i = 0; i < 8; ++i) {
-        formatElem = this.getFormattingElement(tagLc);
-
-        if (!formatElem) {
-          unmatched = false;
-          break;
-        }
-        else if (this.openStack.indexOf(formatElem) < 0) {
-          this.currentFormatting.splice(this.currentFormatting.indexOf(formatElem), 1);
-          this.currentFormatElem = last(this.currentFormatting);
-          parseError = true;
-          break;
-        }
-        else if (!this.isInScope(tagLc, SCOPE_ELEMENTS)) {
-          parseError = true;
-          break;
-        }
-        else if (formatElem !== this.currentNode)
-          parseError = true;
-
-        const furthestBlock = this.getFurthestBlock(tagLc);
-
-        if (!furthestBlock)
-          break;
-
-        popped = true;
-
-        const commonAncestor = formatElem.parent;
-        let bookmark = this.currentFormatting.indexOf(formatElem);
-        let node = furthestBlock;
-        let lastNode = furthestBlock;
-        let nodeIndex: number;
-        let newElem: DomNode;
-
-        for (let j = 0; j < 3; ++j) {
-          node = node.parent;
-          nodeIndex = this.currentFormatting.indexOf(node);
-
-          if (nodeIndex < 0) {
-            this.openStack.splice(this.openStack.indexOf(node), 1);
-            continue;
-          }
-          else if (node === formatElem)
-            break;
-
-          newElem = formatElem.partialClone(true);
-          newElem.closureState = ClosureState.PROGRAMMATICALLY_CLOSED;
-
-          this.currentFormatting[nodeIndex] = newElem;
-          this.openStack[this.openStack.indexOf(node)] = newElem;
-          node = newElem;
-
-          if (lastNode === furthestBlock)
-            bookmark = nodeIndex;
-
-          node.addChild(lastNode.detach());
-          lastNode = node;
-        }
-
-        if (FOSTER_PARENT_SPECIAL_TARGETS.has(commonAncestor.tagLc)) {
-          const [fosterParent, insertionIndex] = this.getFosterParent();
-
-          if (insertionIndex < 0)
-            fosterParent.addChild(lastNode);
-          else {
-            fosterParent.children.splice(insertionIndex, 0, lastNode);
-            lastNode.parent = fosterParent;
-          }
-
-          lastNode.parent = fosterParent;
-        }
-        else
-          commonAncestor.addChild(lastNode.detach());
-
-        newElem = formatElem.partialClone(true);
-        formatElem.closureState = ClosureState.PROGRAMMATICALLY_CLOSED;
-        newElem.children = furthestBlock.children;
-        newElem.children.forEach(child => child.parent = newElem);
-        furthestBlock.children = [newElem];
-        newElem.parent = furthestBlock;
-        newElem.closureState = ClosureState.PROGRAMMATICALLY_CLOSED;
-
-        let formatElemIndex = this.currentFormatting.indexOf(formatElem);
-
-        if (bookmark === formatElemIndex)
-          this.currentFormatting[bookmark] = newElem;
-        else {
-          if (bookmark < formatElemIndex)
-            ++formatElemIndex;
-
-          this.currentFormatting.splice(bookmark, 0, newElem);
-          this.currentFormatting.splice(formatElemIndex, 1);
-        }
-
-        formatElemIndex = this.openStack.indexOf(formatElem);
-        this.openStack.splice(formatElemIndex, 1);
-
-        // Implementing the second part of step 20 ("...and insert the new element into the stack of
-        // open elements immediately below the position of *furthest block* in that stack.") causes
-        // problems in this implementation (and doesn't make a lot of sense), so it's been left out.
-      }
-    }
-
-    if (!popped && !unmatched) {
+    if (!popped) {
       const nodeIndex = this.openStack.map(node => node.tagLc).lastIndexOf(tagLc);
 
       if (nodeIndex > 0) { // No, I really don't want >= 0.
