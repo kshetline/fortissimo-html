@@ -52,7 +52,7 @@
   <p>One</p>
   <p>Two
   <p>Three</p>
-  <? an ignored processing instruction >
+  <? an ignored processing instruction, followed by an unmatched tag >
   </td>
   <! -- not a comment >
   <div class="backdrop">
@@ -76,11 +76,11 @@
   <br/>
   <br>
   <p>Foo
-  <p>Bar
+  <p>Bar</p>
   <!-- Misnested 1 -->
   <p>1<b>2<i class="foo">3</b>4</i>5</p>
   <!-- Misnested 2 -->
-  <b>1<p>2</b>3</p>
+  <b class="bar">1<p>2</b>3</p>
   <table>
     <caption>A Table
     <th>foo

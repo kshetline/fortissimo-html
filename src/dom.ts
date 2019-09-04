@@ -11,7 +11,8 @@ export enum ClosureState {
   UNCLOSED,
   SELF_CLOSED,
   EXPLICITLY_CLOSED,
-  IMPLICITLY_CLOSED
+  IMPLICITLY_CLOSED,
+  PROGRAMMATICALLY_CLOSED
 }
 
 export abstract class DomElement {
@@ -31,6 +32,7 @@ export abstract class DomElement {
     return depth;
   }
 
+  // noinspection JSUnusedGlobalSymbols
   toJSON(): any {
     return this.toString() + ' (' + this.depth + ')';
   }
@@ -109,6 +111,28 @@ export class DomNode extends DomElement {
     child.parent = this;
   }
 
+  removeChild(child: DomElement): boolean {
+    if (this.children) {
+      const index = this.children.indexOf(child);
+
+      if (index >= 0) {
+        this.children.splice(index, 1);
+        child.parent = undefined;
+
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  detach(): DomNode {
+    if (this.parent)
+      this.parent.removeChild(this);
+
+    return this;
+  }
+
   partialClone(synthetic?: boolean): DomNode {
     const clone = new DomNode(this.tag, synthetic || this.synthetic);
 
@@ -134,6 +158,9 @@ export class DomNode extends DomElement {
 
     if (this.values)
       json.value = this.values;
+
+    if (this.parent)
+      json.parentTag = this.parent.tag;
 
     if (this.children)
       json.children = this.children;
@@ -329,6 +356,7 @@ export class DomModel {
   pop(tagLc?: string): void {
     let popped = false;
     let unmatched = false;
+    let parseError = false;
 
     if (!tagLc || this.currentNode.tagLc === tagLc) {
       popped = true;
@@ -345,25 +373,24 @@ export class DomModel {
       }
     }
     else if (FORMATTING_ELEMENTS.has(tagLc)) {
-      // The following is adapted from https://html.spec.whatwg.org/multipage/parsing.html#adoptionAgency
+      // The following is adapted from https://html.spec.whatwg.org/multipage/parsing.html#adoptionAgency.
       let formatElem: DomNode;
-      let parseError = false;
 
       for (let i = 0; i < 8; ++i) {
         formatElem = this.getFormattingElement(tagLc);
 
-        if (!formatElem)
+        if (!formatElem) {
+          unmatched = false;
           break;
+        }
         else if (this.openStack.indexOf(formatElem) < 0) {
           this.currentFormatting.splice(this.currentFormatting.indexOf(formatElem), 1);
           this.currentFormatElem = last(this.currentFormatting);
           parseError = true;
-          unmatched = true;
           break;
         }
         else if (!this.isInScope(tagLc, SCOPE_ELEMENTS)) {
           parseError = true;
-          unmatched = true;
           break;
         }
         else if (formatElem !== this.currentNode)
@@ -394,7 +421,8 @@ export class DomModel {
           else if (node === formatElem)
             break;
 
-          newElem = new DomNode(tagLc, true);
+          newElem = formatElem.partialClone(true);
+          newElem.closureState = ClosureState.PROGRAMMATICALLY_CLOSED;
 
           this.currentFormatting[nodeIndex] = newElem;
           this.openStack[this.openStack.indexOf(node)] = newElem;
@@ -403,7 +431,7 @@ export class DomModel {
           if (lastNode === furthestBlock)
             bookmark = nodeIndex;
 
-          node.addChild(lastNode);
+          node.addChild(lastNode.detach());
           lastNode = node;
         }
 
@@ -420,13 +448,15 @@ export class DomModel {
           lastNode.parent = fosterParent;
         }
         else
-          commonAncestor.addChild(lastNode);
+          commonAncestor.addChild(lastNode.detach());
 
-        newElem = new DomNode(tagLc, true);
+        newElem = formatElem.partialClone(true);
+        formatElem.closureState = ClosureState.PROGRAMMATICALLY_CLOSED;
         newElem.children = furthestBlock.children;
         newElem.children.forEach(child => child.parent = newElem);
         furthestBlock.children = [newElem];
         newElem.parent = furthestBlock;
+        newElem.closureState = ClosureState.PROGRAMMATICALLY_CLOSED;
 
         let formatElemIndex = this.currentFormatting.indexOf(formatElem);
 
@@ -443,9 +473,9 @@ export class DomModel {
         formatElemIndex = this.openStack.indexOf(formatElem);
         this.openStack.splice(formatElemIndex, 1);
 
-        const furthestBlockIndex = this.openStack.indexOf(furthestBlock);
-
-        this.openStack.splice(furthestBlockIndex + 1, 0, newElem);
+        // Implementing the second part of step 20 ("...and insert the new element into the stack of
+        // open elements immediately below the position of *furthest block* in that stack.") causes
+        // problems in this implementation (and doesn't make a lot of sense), so it's been left out.
       }
     }
 
@@ -458,6 +488,7 @@ export class DomModel {
             const node = this.currentFormatting[i];
 
             if (node.tagLc === tagLc) {
+              node.closureState = ClosureState.EXPLICITLY_CLOSED;
               this.currentFormatting.splice(i, 1);
               break;
             }
@@ -477,7 +508,9 @@ export class DomModel {
         }
 
         while (this.openStack.length > nodeIndex) {
-          this.currentNode.closureState = ClosureState.IMPLICITLY_CLOSED;
+          if (!this.currentNode.closureState)
+            this.currentNode.closureState = ClosureState.IMPLICITLY_CLOSED;
+
           this.openStack.pop();
           this.updateCurrentNode();
         }
