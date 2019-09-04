@@ -248,11 +248,12 @@ export class HtmlParser {
 
         case State.IN_CLOSE_TAG:
           if (ch !== '>') {
+            this.pendingSource = this.leadingSpace + '<' + this.pendingSource;
             this.reportError('Syntax error in close tag');
             break;
           }
           else {
-            this.dom.pop(this.currentTagLc);
+            this.pop(this.currentTagLc);
             this.doCloseTagCallback(this.leadingSpace, this.currentTag, this.collectedSpace);
           }
         break;
@@ -292,7 +293,7 @@ export class HtmlParser {
             this.pendingSource = '';
 
             if (end.length > 1 ||  VOID_ELEMENTS.has(this.currentTagLc)) {
-              this.dom.pop(null);
+              this.pop(null);
               this.state = State.OUTSIDE_MARKUP;
             }
             else if (this.currentTagLc === 'script')
@@ -439,7 +440,7 @@ export class HtmlParser {
 
             const $$ = new RegExp('^<\\/(' + tag + ')(\\s*)>$', 'i').exec(closeTag);
 
-            this.dom.pop();
+            this.pop();
             this.doCloseTagCallback('', $$[1], $$[2]);
           }
         break;
@@ -458,6 +459,11 @@ export class HtmlParser {
 
     if (this.parsingResolver)
       this.parsingResolver(this.dom.getRoot());
+  }
+
+  private pop(tagLc?: string) {
+    if (!this.dom.pop(tagLc) && this.callbackError)
+       this.callbackError(`Mismatched closing tag </${tagLc}>`, this.lineNumber, this.column, '');
   }
 
   private reportError(message: string) {
@@ -632,12 +638,21 @@ export class HtmlParser {
     let value = init;
 
     let ch: string;
+    let afterSlash = false;
 
-    while ((ch = this.getChar()) && ch !== quote && (quote || (!isWhiteSpace(ch) && ch !== '/' && ch !== '>')))
+    while ((ch = this.getChar()) && ch !== quote && (quote || (!isWhiteSpace(ch) && ch !== '>'))) {
       value += ch;
+      afterSlash = ch === '/';
+    }
 
-    if (!quote)
+    if (!quote) {
       this.putBack(ch);
+
+      if (afterSlash) {
+        this.putBack('/');
+        value = value.substr(0, value.length - 1);
+      }
+    }
 
     return value;
   }

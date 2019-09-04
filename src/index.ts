@@ -54,11 +54,18 @@ function processFile(file: string) {
 
         console.log('*** Finished in %s msec (%s MB/sec)', totalTime.toFixed(1), speed.toFixed(2));
         console.log('*** output matches input: ' + (rebuilt === content));
+
+        if (rebuilt !== content)
+          console.log(rebuilt);
+
         console.log('*** unclosed tags: ' + unclosed);
       })
       .onError((error, line, col, source) => {
-        console.error('*** %s ***\n***%s: [%s, %s]', source, error, line, col);
-        rebuilt += source;
+        if (source)
+          console.error('*** %s ***', source);
+
+        console.error('*** %s: [%s, %s]', error, line, col);
+        rebuilt += source || '';
       })
       .onOpenTagEnd((depth, leading, tag, end) => {
         console.log('tag end:', end + ' (' + depth + ')');

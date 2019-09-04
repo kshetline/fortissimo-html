@@ -58,8 +58,9 @@
   <div class="backdrop">
     <div class='outer-wrapper'>
       <div class="sizer">&nbsp;</div>
-      <!-- Forced error! -->
-      <div class="inner-wrapper">
+      <!-- Very sloppy attribute values -->
+      <input type=hidden foo==bar/>
+      <div class="inner-wrapper" foo==bar/baz>
         <div class="content">
           <ul>
             <li>One</li>
@@ -99,5 +100,8 @@ nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
 Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu
 fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in
 culpa qui officia deserunt mollit anim id est laborum.</textarea>
+<!-- Forced errors -->
+</ >
+</span nonspace >
 </body>
 </html>

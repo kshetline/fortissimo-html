@@ -235,9 +235,11 @@ export class DomModel {
   private reconstructFormattingIfNeeded(): void {
     // Adapted from https://html.spec.whatwg.org/multipage/parsing.html#reconstruct-the-active-formatting-elements.
 
+    // Step 1.
     if (this.currentFormatting.length === 0)
       return;
 
+    // Steps 2-4, rearranged from the original "goto" logic.
     let entryIndex = this.currentFormatting.length - 1;
     let entry = this.currentFormatting[entryIndex];
     let skipAdvance = false;
@@ -245,28 +247,32 @@ export class DomModel {
     if (MARKER_ELEMENTS.has(entry.tagLc) || this.openStack.indexOf(entry) >= 0)
       return;
 
+    // "Rewind"
     do {
       if (entryIndex === 0) {
         skipAdvance = true;
         break;
       }
 
+      // Step 5
       entry = this.currentFormatting[--entryIndex];
-    } while (!MARKER_ELEMENTS.has(entry.tagLc) && this.openStack.indexOf(entry) < 0);
+    } while (!MARKER_ELEMENTS.has(entry.tagLc) && this.openStack.indexOf(entry) < 0); // <- Step 6
 
+    // Step 7, "Advance"
     do {
       if (skipAdvance)
         skipAdvance = false;
-      else {
+      else
         entry = this.currentFormatting[++entryIndex];
-      }
 
+      // Step 8, "Create"
       entry = entry.partialClone(true);
+      // Step 9
       last(this.openStack).addChild(entry);
       this.openStack.push(entry);
       this.currentNode = entry;
       this.currentFormatting[entryIndex] = entry;
-    } while (entryIndex < this.currentFormatting.length - 1);
+    } while (entryIndex < this.currentFormatting.length - 1); // <- Step 10
   }
 
   push(node: DomNode): void {
@@ -359,8 +365,8 @@ export class DomModel {
     let popped = false;
     let parseError = false;
 
-    // Steps 1 and 2 taken care of by earlier code in this method.
-    // Steps 3-5, "outer loop"
+    // Steps 1 and 2 taken care of before this method is called.
+    // Steps 3-5, "Outer loop"
     for (let i = 0; i < 8; ++i) {
       // Step 6
       formatElem = this.getFormattingElement(tagLc);
@@ -401,7 +407,7 @@ export class DomModel {
       let lastNode = furthestBlock;
       let newElem: DomNode;
 
-      // Steps 14.1-14.2
+      // Steps 14.1-14.2, "Inner Loop"
       for (let j = 1; ; ++j) {
         // Step 14.3
         node = node.parent;
@@ -499,7 +505,7 @@ export class DomModel {
     return [popped, parseError];
   }
 
-  pop(tagLc?: string): void {
+  pop(tagLc?: string): boolean {
     let popped = false;
     let parseError = false;
 
@@ -556,8 +562,10 @@ export class DomModel {
           this.updateCurrentNode();
         }
       }
-      else
+      else {
         this.addChild(new UnmatchedClosingTag(tagLc));
+        parseError = true;
+      }
     }
 
     if (this.openStack.length === 0)
@@ -572,6 +580,8 @@ export class DomModel {
       if (index > 0)
         node.parent = this.openStack[index - 1];
     });
+
+    return !parseError;
   }
 
   getUnclosedTagCount(): number {
