@@ -174,7 +174,16 @@ export class HtmlParser {
     let node: DomNode;
     const startTime = processMillis();
 
-    while ((ch = this.getNonSpace()) !== undefined) {
+    while (true) {
+      ch = this.getChar();
+
+      if (ch === undefined)
+        break;
+      else if (isWhiteSpace(ch)) {
+        this.collectedSpace += ch;
+        continue;
+      }
+
       switch (this.state) {
         case State.OUTSIDE_MARKUP:
           this.putBack(ch);
@@ -581,23 +590,16 @@ export class HtmlParser {
       --this.column;
   }
 
-  private getNonSpace(): string {
-    let ch;
-
-    while (isWhiteSpace(ch = this.getChar())) {
-      this.collectedSpace += ch;
-    }
-
-    return ch;
-  }
-
   private gatherText(): [string, number] {
     let text = '';
     let ch: string;
     let nextWSStart = -1;
     let mightNeedRepair = false;
 
-    this.eatWhiteSpace();
+    while (isWhiteSpace(ch = this.getChar()))
+      this.collectedSpace += ch;
+
+    this.putBack(ch);
 
     while ((ch = this.getChar()) !== undefined) {
       if (ch === '<') {
@@ -757,18 +759,6 @@ export class HtmlParser {
     }
 
     return [content, '', false];
-  }
-
-  private eatWhiteSpace(init?: string): void {
-    if (init)
-      this.collectedSpace = init;
-
-    let ch;
-
-    while (isWhiteSpace(ch = this.getChar()))
-      this.collectedSpace += ch;
-
-    this.putBack(ch);
   }
 
   private adjustOptions(): void {
