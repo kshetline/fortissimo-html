@@ -52,18 +52,19 @@
   <p>One</p>
   <p>Two
   <p>Three</p>
-  <![CDATA[First CDATA example]]>
+  <p><![CDATA[First CDATA example &amp;]]></p>
   <math>
-    <![CDATA[Second CDATA example]]>
+    <annotation><![CDATA[Second CDATA example &amp; entities ignored]]></annotation>
   </math>
   <br/>
-  <svg width=200 height=20>
-    <text x=0 y=15><![CDATA[Third CDATA example]]></text>
+  <svg width=300 height=20>
+    <text x=0 y=15># <![CDATA[Third CDATA example]]> #</text>
   </svg>
   <? an ignored processing instruction, followed by an unmatched tag >
   </td>
+  <th>This doesn't belong here</th>
   <! -- not a comment >
-  <div class="backdrop">
+  <div class="backdrop" class="duplicate-attribute-ignored">
     <div class='outer-wrapper'>
       <div class="sizer">&nbsp;</div>
       <!-- Very sloppy attribute values -->
@@ -110,8 +111,8 @@ fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in
 culpa qui officia deserunt mollit anim id est laborum.</textarea>
 <!-- Tricky text and forced errors  -->
   </ >
-  <h5>2 < 3, & that's true</h5>
-  </span nonspace >
+  <h5>2 < 3, 7 > 6, & that's true</h5>
+  </span nonspace
   <span class="error" / >Bazinga!</span>
 </body>
 </html>

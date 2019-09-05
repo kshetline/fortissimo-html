@@ -247,6 +247,8 @@ export class HtmlParser {
 
         case State.IN_CLOSE_TAG:
           if (ch !== '>') {
+            this.putBack(ch);
+            this.pop(this.currentTagLc);
             this.reportError('Syntax error in close tag');
             break;
           }
@@ -290,10 +292,12 @@ export class HtmlParser {
             this.collectedSpace = '';
             this.pendingSource = '';
 
-            if (end.length > 1 ||  VOID_ELEMENTS.has(this.currentTagLc)) {
+            if (end.length > 1 || (!this.xmlMode && VOID_ELEMENTS.has(this.currentTagLc))) {
               this.pop(null);
               this.state = State.OUTSIDE_MARKUP;
             }
+            else if (this.xmlMode)
+              this.state = State.OUTSIDE_MARKUP;
             else if (this.currentTagLc === 'script')
               this.state = State.IN_SCRIPT_ELEMENT;
             else if (this.currentTagLc === 'style')
@@ -370,6 +374,11 @@ export class HtmlParser {
               this.callbackDeclaration(this.dom.getDepth() + 1, this.leadingSpace, content);
             else if (this.callbackUnhandled)
               this.callbackUnhandled(this.dom.getDepth() + 1, this.leadingSpace, '<!' + content + '>');
+
+            if (/^DOCTYPE\b.*\bXHTML\b/.test(content) && this.dom.canDoXmlMode()) {
+              this.xmlMode = true;
+              this.dom.setXmlMode(true);
+            }
           }
 
           this.collectedSpace = '';
@@ -645,7 +654,7 @@ export class HtmlParser {
     while (isPCENChar(ch = this.getChar()))
       this.currentTag += ch;
 
-    this.currentTagLc = this.currentTag.toLowerCase();
+    this.currentTagLc = this.xmlMode ? this.currentTag : this.currentTag.toLowerCase();
     this.putBack(ch);
   }
 

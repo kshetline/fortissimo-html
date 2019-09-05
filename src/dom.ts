@@ -94,15 +94,19 @@ export class DomNode extends DomElement {
   tagLc: string;
   values: Record<string, string>;
 
-  constructor(public tag: string, synthetic?: boolean) {
+  constructor(public tag: string, caseSensitive = false, synthetic = false) {
     super(null);
-    this.tagLc = tag.toLowerCase();
+    this.tagLc = caseSensitive ? tag : tag.toLowerCase();
 
     if (synthetic)
       this.synthetic = true;
   }
 
   addAttribute(name: string, value: string): void {
+    // Ignore duplicate attribute names - first provided takes priority
+    if (this.values && name in this.values)
+      return;
+
     this.attributes = this.attributes || [];
     this.attributes.push(name);
     this.values = this.values || {};
@@ -142,8 +146,9 @@ export class DomNode extends DomElement {
   }
 
   partialClone(synthetic?: boolean): DomNode {
-    const clone = new DomNode(this.tag, synthetic || this.synthetic);
+    const clone = new DomNode(this.tag, true, synthetic || this.synthetic);
 
+    clone.tagLc = this.tagLc;
     clone.attributes = this.attributes && this.attributes.slice(0);
 
     if (this.values)
@@ -178,7 +183,7 @@ export class DomNode extends DomElement {
 }
 
 export class DomModel {
-  private root: DomNode = new DomNode('/');
+  private root: DomNode = new DomNode('/', false, true);
 
   private currentFormatElem: DomNode;
   private currentFormatting: DomNode[] = [];
@@ -221,21 +226,23 @@ export class DomModel {
   }
 
   addChild(child: DomElement, leadingSpace?: string, pending_th = false): void {
-    this.reconstructFormattingIfNeeded();
+    if (!this.xmlMode) {
+      this.reconstructFormattingIfNeeded();
 
-    if (this.inTable > 0 && child instanceof DomNode && /^(td|th)$/.test(child.tagLc) && this.currentNode.tagLc !== 'tr') {
-      const newParent = new DomNode('tr', true);
+      if (this.inTable > 0 && child instanceof DomNode && /^(td|th)$/.test(child.tagLc) && this.currentNode.tagLc !== 'tr') {
+        const newParent = new DomNode('tr', false, true);
 
-      this.addChild(newParent, '', child.tagLc === 'th');
-      this.openStack.push(newParent);
-      this.currentNode = newParent;
-    }
-    else if (this.inTable > 0 && child instanceof DomNode && child.tagLc === 'tr' &&  !/^(tbody|thead|table)$/.test(this.currentNode.tagLc)) {
-      const newParent = new DomNode(pending_th ? 'thead' : 'tbody', true);
+        this.addChild(newParent, '', child.tagLc === 'th');
+        this.openStack.push(newParent);
+        this.currentNode = newParent;
+      }
+      else if (this.inTable > 0 && child instanceof DomNode && child.tagLc === 'tr' &&  !/^(tbody|thead|table)$/.test(this.currentNode.tagLc)) {
+        const newParent = new DomNode(pending_th ? 'thead' : 'tbody', false, true);
 
-      this.addChild(newParent);
-      this.openStack.push(newParent);
-      this.currentNode = newParent;
+        this.addChild(newParent);
+        this.openStack.push(newParent);
+        this.currentNode = newParent;
+      }
     }
 
     this.currentNode.addChild(child, leadingSpace);
