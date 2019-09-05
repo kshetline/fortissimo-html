@@ -1,7 +1,7 @@
 import { processMillis } from './util';
 import { VOID_ELEMENTS } from './elements';
 import { fixBadChars, isAttributeNameChar, isMarkupStart, isPCENChar, isWhiteSpace } from './characters';
-import { CommentElement, DeclarationElement, DomModel, DomNode, ProcessingElement, TextElement } from './dom';
+import { CData, CommentElement, DeclarationElement, DomModel, DomNode, ProcessingElement, TextElement } from './dom';
 
 export interface HtmlParserOptions {
   eol?: string;
@@ -46,6 +46,7 @@ type ErrorCallback = (error: string, line?: number, column?: number, source?: st
 export class HtmlParser {
   private callbackAttribute: AttributeCallback;
   private callbackCloseTag: BasicCallback;
+  private callbackCData: BasicCallback;
   private callbackComment: BasicCallback;
   private callbackDeclaration: BasicCallback;
   private callbackEnd: EndCallback;
@@ -85,6 +86,11 @@ export class HtmlParser {
 
   onAttribute(callback: AttributeCallback): HtmlParser {
     this.callbackAttribute = callback;
+    return this;
+  }
+
+  onCData(callback: BasicCallback): HtmlParser {
+    this.callbackCData = callback;
     return this;
   }
 
@@ -163,6 +169,7 @@ export class HtmlParser {
     let ch: string;
     let content: string;
     let terminated: boolean;
+    let isCData: boolean;
     let closeTag: string;
     let node: DomNode;
     const startTime = processMillis();
@@ -198,14 +205,6 @@ export class HtmlParser {
           switch (ch) {
             case '/':
               this.state = State.AT_CLOSE_TAG_START;
-              ch = this.getChar();
-
-              if (isWhiteSpace(ch)) {
-                this.reportError('Syntax error in close tag');
-                break;
-              }
-              else
-                this.putBack(ch);
             break;
 
             case '!':
@@ -248,7 +247,6 @@ export class HtmlParser {
 
         case State.IN_CLOSE_TAG:
           if (ch !== '>') {
-            this.pendingSource = this.leadingSpace + '<' + this.pendingSource;
             this.reportError('Syntax error in close tag');
             break;
           }
@@ -350,16 +348,29 @@ export class HtmlParser {
               this.putBack(ch2);
           }
 
-          [content, terminated] = this.gatherDeclarationOrProcessing(this.collectedSpace + ch);
+          [content, terminated, isCData] = this.gatherDeclarationOrProcessing(this.collectedSpace + ch,
+            this.dom.shouldParseCData());
 
-          this.dom.addChild(new DeclarationElement(content), this.leadingSpace);
+          if (isCData) {
+            this.dom.addChild(new CData(content), this.leadingSpace);
 
-          if (!terminated)
-            this.reportError('File ended in unterminated declaration');
-          else if (this.callbackDeclaration)
-            this.callbackDeclaration(this.dom.getDepth() + 1, this.leadingSpace, content);
-          else if (this.callbackUnhandled)
-            this.callbackUnhandled(this.dom.getDepth() + 1, this.leadingSpace, '<!' + content + '>');
+            if (!terminated)
+              this.reportError('File ended in unterminated CDATA');
+            else if (this.callbackCData)
+              this.callbackCData(this.dom.getDepth() + 1, this.leadingSpace, content);
+            else if (this.callbackUnhandled)
+              this.callbackUnhandled(this.dom.getDepth() + 1, this.leadingSpace, '<![CDATA[' + content + ']]>');
+          }
+          else {
+            this.dom.addChild(new DeclarationElement(content), this.leadingSpace);
+
+            if (!terminated)
+              this.reportError('File ended in unterminated declaration');
+            else if (this.callbackDeclaration)
+              this.callbackDeclaration(this.dom.getDepth() + 1, this.leadingSpace, content);
+            else if (this.callbackUnhandled)
+              this.callbackUnhandled(this.dom.getDepth() + 1, this.leadingSpace, '<!' + content + '>');
+          }
 
           this.collectedSpace = '';
           this.pendingSource = '';
@@ -583,12 +594,27 @@ export class HtmlParser {
       if (ch === '<') {
         const ch2 = this.getChar();
 
-        if (isMarkupStart(ch2)) {
+        if (ch2 === '/') {
+          const ch3 = this.getChar();
+
+          if (ch3 !== '/' && isMarkupStart(ch3)) {
+            this.putBack(ch3);
+            this.putBack(ch2);
+            break;
+          }
+          else {
+            text += ch + ch2 + (ch3 || '');
+            mightNeedRepair = true;
+          }
+        }
+        else if (isMarkupStart(ch2)) {
           this.putBack(ch2);
           break;
         }
-        else
+        else {
+          text += ch + (ch2 || '');
           mightNeedRepair = true;
+        }
       }
       else {
         if (isWhiteSpace(ch)) {
@@ -679,21 +705,26 @@ export class HtmlParser {
     return [comment, false];
   }
 
-  private gatherDeclarationOrProcessing(init = ''): [string, boolean] {
+  private gatherDeclarationOrProcessing(init = '', checkForCData?: boolean): [string, boolean, boolean] {
     if (init === '>')
-      return ['', true];
+      return ['', true, false];
 
     let content = init;
     let ch: string;
+    let cdataDetected = false;
 
     while ((ch = this.getChar())) {
-      if (ch === '>')
-        return [content, true];
+      if (checkForCData && content.length === 7) {
+        cdataDetected = (content === '[CDATA[');
+      }
+
+      if (ch === '>' && (!cdataDetected || content.endsWith(']]')))
+        return [cdataDetected ? content.substring(7, content.length - 2) : content, true, cdataDetected];
 
       content += ch;
    }
 
-    return [content, false];
+    return [content, false, false];
   }
 
   private gatherUntilEndTag(endTag: string, init = ''): [string, string, boolean] {

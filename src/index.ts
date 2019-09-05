@@ -33,6 +33,10 @@ function processFile(file: string) {
         console.log('attribute:', name + equals.trim() + quote + value + quote);
         rebuilt += leading + name + equals + quote + value + quote;
       })
+      .onCData((depth, leading, cdata) => {
+        console.log('CDATA:', '<![CDATA[' + cdata + ']]>' + ' (' + depth + ')');
+        rebuilt += leading + '<![CDATA[' + cdata + ']]>';
+      })
       .onCloseTag((depth, leading, tag, trailing) => {
         console.log('close:', '</' + tag + trailing + '>' + ' (' + depth + ')');
         rebuilt += leading + '</' + tag + trailing + '>';

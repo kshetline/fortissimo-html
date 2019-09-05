@@ -38,6 +38,14 @@ export abstract class DomElement {
   }
 }
 
+export class CData extends DomElement {
+  constructor(content: string) { super(content); }
+
+  toString(): string {
+    return '<![CDATA[' + this.content + ']]>';
+  }
+}
+
 export class CommentElement extends DomElement {
   constructor(content: string) { super(content); }
 
@@ -175,6 +183,7 @@ export class DomModel {
   private currentFormatElem: DomNode;
   private currentFormatting: DomNode[] = [];
   private currentNode = this.root;
+  private inMathOrSvg = 0;
   private inTable = 0;
   private openStack = [this.root];
   private xmlMode = false;
@@ -283,6 +292,8 @@ export class DomModel {
 
     if (node.tagLc === 'table')
       ++this.inTable;
+    else if (node.tagLc === 'math' || node.tagLc === 'svg')
+      ++this.inMathOrSvg;
 
     if (FORMATTING_ELEMENTS.has(node.tagLc) || MARKER_ELEMENTS.has(node.tagLc)) {
       this.currentFormatting.push(node);
@@ -342,6 +353,8 @@ export class DomModel {
   }
 
   private getFosterParent(): [DomNode, number] {
+    // This is a simplified version of https://html.spec.whatwg.org/multipage/parsing.html#foster-parent,
+    // with handling for <template> elements removed.
     let fosterParent: DomNode;
     let insertionIndex = -1;
 
@@ -523,13 +536,13 @@ export class DomModel {
         this.currentFormatElem = last(this.currentFormatting);
       }
     }
-    else if (FORMATTING_ELEMENTS.has(tagLc))
+    else if (!this.xmlMode && FORMATTING_ELEMENTS.has(tagLc))
       [popped, parseError] = this.invokeAdoptionAgency(tagLc);
 
     if (!popped) {
       const nodeIndex = this.openStack.map(node => node.tagLc).lastIndexOf(tagLc);
 
-      if (nodeIndex > 0) { // No, I really don't want >= 0.
+      if (!this.xmlMode && nodeIndex > 0) { // No, I really don't want >= 0.
         if (FORMATTING_ELEMENTS.has(tagLc)) {
           for (let i = this.currentFormatting.length - 1; i >= 0; --i) {
             const node = this.currentFormatting[i];
@@ -573,15 +586,21 @@ export class DomModel {
 
     this.updateCurrentNode();
 
+    this.inMathOrSvg = 0;
     this.inTable = 0;
     this.openStack.forEach((node, index) => {
       this.inTable += (node.tagLc === 'table' ? 1 : 0);
+      this.inMathOrSvg += (node.tagLc === 'math' || node.tagLc === 'svg' ? 1 : 0);
 
       if (index > 0)
         node.parent = this.openStack[index - 1];
     });
 
     return !parseError;
+  }
+
+  shouldParseCData(): boolean {
+    return this.xmlMode || this.inMathOrSvg > 0;
   }
 
   getUnclosedTagCount(): number {
