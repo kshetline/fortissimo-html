@@ -7,6 +7,12 @@ import { HtmlParser } from './html-parser';
 import { processMillis } from './util';
 
 const keepAlive = setInterval(() => {}, 100);
+const logDomTreeFlag = false;
+const logErrorsFlag = true;
+const logFilesFlag = true;
+const logProgressFlag = false;
+const logRebuiltFlag = false;
+const logStatsFlag = true;
 
 commander
   .option('-x, --exclude <exclude>', 'pattern for files/directories to exclude')
@@ -25,7 +31,8 @@ commander
   .parse(process.argv);
 
 async function processFile(file: string): Promise<void> {
-  console.log(file);
+  if (logFilesFlag)
+    console.log('\n\n' + file);
 
   try {
     const content = fs.readFileSync(file, {encoding: 'utf8'});
@@ -35,73 +42,85 @@ async function processFile(file: string): Promise<void> {
 
     await parser
       .onAttribute((leading, name, equals, value, quote) => {
-        console.log('attribute:', name + equals.trim() + quote + value + quote);
+        logProgress('attribute:', name + equals.trim() + quote + value + quote);
         rebuilt += leading + name + equals + quote + value + quote;
       })
       .onCData((depth, leading, cdata) => {
-        console.log('CDATA:', '<![CDATA[' + cdata + ']]>' + ' (' + depth + ')');
+        logProgress('CDATA:', '<![CDATA[' + cdata + ']]>' + ' (' + depth + ')');
         rebuilt += leading + '<![CDATA[' + cdata + ']]>';
       })
       .onCloseTag((depth, leading, tag, trailing) => {
-        console.log('close:', '</' + tag + trailing + '>' + ' (' + depth + ')');
+        logProgress('close:', '</' + tag + trailing + '>' + ' (' + depth + ')');
         rebuilt += leading + '</' + tag + trailing + '>';
       })
       .onComment((depth, leading, comment) => {
-        console.log('comment:', comment + ' (' + depth + ')');
+        logProgress('comment:', comment + ' (' + depth + ')');
         rebuilt += leading + '<!--' + comment + '-->';
       })
       .onDeclaration((depth, leading, declaration) => {
-        console.log('declaration:', '<!' + declaration + '>' + ' (' + depth + ')');
+        logProgress('declaration:', '<!' + declaration + '>' + ' (' + depth + ')');
         rebuilt += leading + '<!' + declaration + '>';
       })
       .onEnd((trailing, domRoot, unclosed) => {
         rebuilt += trailing;
 
         const totalTime = processMillis() - startTime;
-        const size = content.length / 1048576;
+        let size = content.length / 1048576;
         const speed = (size / totalTime * 1000);
 
-        console.log('*** Finished in %s msec (%s MB/sec)', totalTime.toFixed(1), speed.toFixed(2));
-        console.log('*** output matches input: ' + (rebuilt === content));
+        if (logStatsFlag) {
+          let unit = 'MB';
 
-        if (rebuilt !== content)
+          if (size < 1) {
+            unit = 'KB';
+            size = content.length / 1024;
+          }
+
+          console.log('*** Finished %s%s in %s msec (%s MB/sec)', size.toFixed(2), unit, totalTime.toFixed(1), speed.toFixed(2));
+          console.log('*** output matches input: ' + (rebuilt === content));
+          console.log('*** unclosed tags: ' + unclosed);
+        }
+
+        if (rebuilt !== content && rebuilt !== content.replace(/\r\n|\n/g, '\n'))
+          logErrors(rebuilt);
+        else if (logRebuiltFlag)
           console.log(rebuilt);
 
-        console.log('*** unclosed tags: ' + unclosed);
-        console.log(JSON.stringify(domRoot, (name, value) => {
-          if (name === 'parent')
-            return undefined;
-          else if (value instanceof DomElement && value.content !== null)
-            return value.toString();
-          else
-            return value;
-        }, 2));
+        if (logDomTreeFlag)
+          console.log(JSON.stringify(domRoot, (name, value) => {
+            if (name === 'parent')
+              return undefined;
+            else if (value instanceof DomElement && value.content !== null)
+              return value.toString();
+            else
+              return value;
+          }, 2));
       })
       .onError((error, line, col, source) => {
         if (source)
-          console.error('*** %s ***', source);
+          logErrors('*** %s ***', source);
 
-        console.error('*** %s: [%s, %s]', error, line, col);
+        logErrors('*** %s: [%s, %s]', error, line, col);
         rebuilt += source || '';
       })
       .onOpenTagEnd((depth, leading, tag, end) => {
-        console.log('tag end:', end + ' (' + depth + ')');
+        logProgress('tag end:', end + ' (' + depth + ')');
         rebuilt += leading + end;
       })
       .onOpenTagStart((depth, leading, tag) => {
-        console.log('tag:', tag + ' (' + depth + ')');
+        logProgress('tag:', tag + ' (' + depth + ')');
         rebuilt += leading + '<' + tag;
       })
       .onProcessing((depth, leading, processing) => {
-        console.log('processing:', '<?' + processing + '>' + ' (' + depth + ')');
+        logProgress('processing:', '<?' + processing + '>' + ' (' + depth + ')');
         rebuilt += leading + '<?' + processing + '>';
       })
       .onText((depth, leading, text, trailing) => {
-        console.log('text:', leading + text + trailing + ' (' + depth + ')');
+        logProgress('text:', leading + text + trailing + ' (' + depth + ')');
         rebuilt += leading + text + trailing;
       })
       .onUnhandled((depth, leading, text, trailing = '') => {
-        console.log('???:', leading + text + trailing + ' (' + depth + ')');
+        logProgress('???:', leading + text + trailing + ' (' + depth + ')');
         rebuilt += leading + text + trailing;
       })
       .parse(content);
@@ -109,4 +128,14 @@ async function processFile(file: string): Promise<void> {
   catch (err) {
     console.error('Error reading file "%s": %s', file, err.toString());
   }
+}
+
+function logErrors(...args: any[]): void {
+  if (logErrorsFlag)
+    console.error(...args);
+}
+
+function logProgress(...args: any[]): void {
+  if (logProgressFlag)
+    console.log(...args);
 }

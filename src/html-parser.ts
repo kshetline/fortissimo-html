@@ -4,7 +4,7 @@ import { fixBadChars, isAttributeNameChar, isMarkupStart, isPCENChar, isWhiteSpa
 import { CData, CommentElement, DeclarationElement, DomModel, DomNode, ProcessingElement, TextElement } from './dom';
 
 export interface HtmlParserOptions {
-  eol?: string;
+  eol?: string | boolean;
   fixBadChars?: boolean;
 }
 
@@ -489,7 +489,7 @@ export class HtmlParser {
           if (!terminated)
             this.reportError(`File ended in unterminated ${tag} section`);
           else {
-            if (content) {
+            if (content || this.collectedSpace) {
               let trailingWhiteSpace = '';
               const $ = /^(.*?)(\s*)$/.exec(content);
 
@@ -612,7 +612,7 @@ export class HtmlParser {
       this.column = 0;
 
       if (this.options.eol)
-        ch = this.options.eol;
+        ch = this.options.eol as string;
     }
     else {
       const cp = ch.charCodeAt(0);
@@ -781,7 +781,7 @@ export class HtmlParser {
 
   private async gatherComment(init = ''): Promise<[string, boolean]> {
     let comment = init;
-    let stage = (init === '-' ? 1 : 0);
+    let stage = (init.endsWith('-') ? 1 : 0);
     let ch: string;
 
     while ((ch = this.getChar() || await this.getNextChunkChar())) {
@@ -827,7 +827,7 @@ export class HtmlParser {
     const ender = '</' + endTag;
     const len = ender.length;
     let content = init;
-    let endStage = 0;
+    let endStage = ender.startsWith(init) ? init.length : 0;
     let ch: string;
 
     while ((ch = this.getChar() || await this.getNextChunkChar())) {
@@ -849,6 +849,7 @@ export class HtmlParser {
   private adjustOptions(): void {
     if (this.options.eol) {
       switch (this.options.eol) {
+        case true:
         case '\n':
         case 'n': this.options.eol = '\n'; break;
 
@@ -858,7 +859,7 @@ export class HtmlParser {
         case '\r\n':
         case 'rn': this.options.eol = '\r\n'; break;
 
-        default: this.options.eol = undefined;
+        default: this.options.eol = false;
       }
     }
   }
