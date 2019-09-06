@@ -54,6 +54,7 @@ export class HtmlParser {
   private callbackOpenTagEnd: BasicCallback;
   private callbackOpenTagStart: BasicCallback;
   private callbackProcessing: BasicCallback;
+  private callbackRequestData: () => void;
   private callbackText: BasicCallback;
   private callbackUnhandled: BasicCallback;
 
@@ -64,7 +65,7 @@ export class HtmlParser {
   private currentTagLc = '';
   private dom = new DomModel();
   private htmlSource: string;
-  private htmlSourceDone: boolean;
+  private htmlSourceIsFinal: boolean;
   private leadingSpace = '';
   private lineNumber  = 1;
   private nextChunk = '';
@@ -140,6 +141,11 @@ export class HtmlParser {
     return this;
   }
 
+  onRequestData(callback: () => void): HtmlParser {
+    this.callbackRequestData = callback;
+    return this;
+  }
+
   onText(callback: BasicCallback): HtmlParser {
     this.callbackText = callback;
     return this;
@@ -150,10 +156,10 @@ export class HtmlParser {
     return this;
   }
 
-  parse(source: string, yieldTime = DEFAULT_YIELD_TIME, done = true): Promise<DomNode> {
+  parse(source = '', yieldTime = DEFAULT_YIELD_TIME, isFinal = !!source): Promise<DomNode> {
     this.parserStarted = true;
-    this.htmlSource = source;
-    this.htmlSourceDone = done;
+    this.htmlSource = source || '';
+    this.htmlSourceIsFinal = isFinal;
 
     this.callbackCloseTag = this.callbackCloseTag || this.callbackUnhandled;
     this.callbackText = this.callbackText || this.callbackUnhandled;
@@ -175,18 +181,18 @@ export class HtmlParser {
     });
   }
 
-  parseChunk(chunk: string, done = false, yieldTime = DEFAULT_YIELD_TIME) {
+  parseChunk(chunk: string, isFinal = false, yieldTime = DEFAULT_YIELD_TIME) {
     if (!this.parserStarted) {
       // noinspection JSIgnoredPromiseFromCall
-      this.parse(chunk, yieldTime, done);
+      this.parse(chunk, yieldTime, isFinal);
 
       return;
     }
 
-    if (this.htmlSourceDone)
+    if (this.htmlSourceIsFinal)
       throw new Error('Parse will no longer accept addition input');
 
-    this.htmlSourceDone = done || !chunk;
+    this.htmlSourceIsFinal = isFinal || !chunk;
 
     if (this.resolveNextChunk) {
       if (!chunk)
@@ -511,9 +517,8 @@ export class HtmlParser {
         break;
       }
 
-      // TODO
-      // if (this.parsingResolver && processMillis() >= startTime + this.yieldTime)
-      //   return;
+      if (processMillis() >= startTime + this.yieldTime)
+        return;
     }
 
     if (this.state !== State.OUTSIDE_MARKUP)
@@ -521,9 +526,7 @@ export class HtmlParser {
 
     this.callbackEnd(this.collectedSpace, this.dom.getRoot(), this.dom.getUnclosedTagCount());
     this.parserFinished = true;
-
-    if (this.parsingResolver)
-      this.parsingResolver(this.dom.getRoot());
+    this.parsingResolver(this.dom.getRoot());
   }
 
   private pop(tagLc?: string) {
@@ -565,26 +568,42 @@ export class HtmlParser {
 
     if (this.putBacks.length > 0) {
       ch = this.putBacks.pop();
-      this.pendingSource += ch;
 
-      if (ch === '\n' || ch === '\r' || ch === '\r\n') {
-        ++this.lineNumber;
-        this.column = 0;
+      if (ch.length > 2)
+        // Retrieve character saved from the previous chunk, which might need to be combined
+        // with a character from the current chunk.
+        ch = ch.substr(2);
+      else {
+        this.pendingSource += ch;
+
+        if (ch === '\n' || ch === '\r' || ch === '\r\n') {
+          ++this.lineNumber;
+          this.column = 0;
+        }
+        else
+          ++this.column;
+
+        return ch;
       }
-      else
-        ++this.column;
-
-      return ch;
     }
 
-    if (this.sourceIndex >= this.htmlSource.length)
+    if (!ch && this.sourceIndex >= this.htmlSource.length)
       return '';
     else {
-      ch = this.htmlSource.charAt(this.sourceIndex++);
+      ch = ch || this.htmlSource.charAt(this.sourceIndex++);
 
-      if (ch === '\r' && this.htmlSource.charAt(this.sourceIndex) === '\n') {
-        ++this.sourceIndex;
-        ch += '\n';
+      if (ch === '\r') {
+        const ch2 = this.htmlSource.charAt(this.sourceIndex);
+
+        if (!ch2 && !this.htmlSourceIsFinal) {
+          // Special chunk boundary case.
+          this.putBacks.push('--' + ch);
+          return '';
+        }
+        else if (ch2 === '\n') {
+          ++this.sourceIndex;
+          ch += '\n';
+        }
       }
     }
 
@@ -600,13 +619,23 @@ export class HtmlParser {
 
       ++this.column;
 
+      // Test for high surrogate
       if (0xD800 <= cp && cp <= 0xDBFF) {
-        const ch2 = this.htmlSource.charAt(this.sourceIndex); // TODO
-        const cp2 = (ch2 && ch2.charCodeAt(0)) || 0;
+        const ch2 = this.htmlSource.charAt(this.sourceIndex);
 
-        if (0xDC00 <= cp2 && cp2 <= 0xDFFF) {
-          ++this.sourceIndex;
-          ch += ch2;
+        if (!ch2 && !this.htmlSourceIsFinal) {
+          // Special chunk boundary case.
+          this.putBacks.push('--' + ch);
+          return '';
+        }
+        else {
+          const cp2 = ch2.charCodeAt(0);
+
+          // Test for low surrogate
+          if (0xDC00 <= cp2 && cp2 <= 0xDFFF) {
+            ++this.sourceIndex;
+            ch += ch2;
+          }
         }
       }
     }
@@ -627,16 +656,19 @@ export class HtmlParser {
   }
 
   private async getNextChunkChar(): Promise<string> {
-    if (this.htmlSourceDone && (!this.htmlSource || this.sourceIndex >= this.htmlSource.length))
+    if (this.htmlSourceIsFinal && (!this.htmlSource || this.sourceIndex >= this.htmlSource.length))
       return '';
     else if (this.nextChunk) {
       this.htmlSource = this.nextChunk;
-      this.htmlSourceDone = this.nextChunkIsFinal;
+      this.htmlSourceIsFinal = this.nextChunkIsFinal;
       this.sourceIndex = 0;
       return this.getChar();
     }
 
     return new Promise<string>(resolve => {
+      if (this.callbackRequestData)
+        setTimeout(() => this.callbackRequestData());
+
       this.resolveNextChunk = resolve;
     });
   }
@@ -667,7 +699,7 @@ export class HtmlParser {
             break;
           }
           else {
-            text += ch + ch2 + (ch3 || '');
+            text += ch + ch2 + ch3;
             mightNeedRepair = true;
           }
         }
@@ -676,7 +708,7 @@ export class HtmlParser {
           break;
         }
         else {
-          text += ch + (ch2 || '');
+          text += ch + ch2;
           mightNeedRepair = true;
         }
       }

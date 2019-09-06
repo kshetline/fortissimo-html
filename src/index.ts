@@ -6,6 +6,8 @@ import { DomElement } from './dom';
 import { HtmlParser } from './html-parser';
 import { processMillis } from './util';
 
+const keepAlive = setInterval(() => {}, 100);
+
 commander
   .option('-x, --exclude <exclude>', 'pattern for files/directories to exclude')
   .arguments('<globs...>')
@@ -17,6 +19,8 @@ commander
 
     for (const file of files)
       await processFile(file);
+
+    clearInterval(keepAlive);
   })
   .parse(process.argv);
 
@@ -101,8 +105,6 @@ async function processFile(file: string): Promise<void> {
         rebuilt += leading + text + trailing;
       })
       .parse(content);
-
-    console.log('*** here ***'); // TODO
   }
   catch (err) {
     console.error('Error reading file "%s": %s', file, err.toString());
