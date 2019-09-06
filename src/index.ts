@@ -9,26 +9,27 @@ import { processMillis } from './util';
 commander
   .option('-x, --exclude <exclude>', 'pattern for files/directories to exclude')
   .arguments('<globs...>')
-  .action((globs: string[]) => {
+  .action(async (globs: string[]) => {
     const options = {
       ignore: commander.exclude ? [commander.exclude] : undefined,
     };
     const files = fg.sync(globs, options);
 
-    files.forEach(file => processFile(file));
+    for (const file of files)
+      await processFile(file);
   })
   .parse(process.argv);
 
-function processFile(file: string) {
+async function processFile(file: string): Promise<void> {
   console.log(file);
 
   try {
     const content = fs.readFileSync(file, {encoding: 'utf8'});
     const startTime = processMillis();
-    const parser = new HtmlParser(content);
+    const parser = new HtmlParser();
     let rebuilt = '';
 
-    const dom = parser
+    await parser
       .onAttribute((leading, name, equals, value, quote) => {
         console.log('attribute:', name + equals.trim() + quote + value + quote);
         rebuilt += leading + name + equals + quote + value + quote;
@@ -63,6 +64,14 @@ function processFile(file: string) {
           console.log(rebuilt);
 
         console.log('*** unclosed tags: ' + unclosed);
+        console.log(JSON.stringify(domRoot, (name, value) => {
+          if (name === 'parent')
+            return undefined;
+          else if (value instanceof DomElement && value.content !== null)
+            return value.toString();
+          else
+            return value;
+        }, 2));
       })
       .onError((error, line, col, source) => {
         if (source)
@@ -91,16 +100,9 @@ function processFile(file: string) {
         console.log('???:', leading + text + trailing + ' (' + depth + ')');
         rebuilt += leading + text + trailing;
       })
-      .parse();
+      .parse(content);
 
-      console.log(JSON.stringify(dom, (name, value) => {
-        if (name === 'parent')
-          return undefined;
-        else if (value instanceof DomElement && value.content !== null)
-          return value.toString();
-        else
-          return value;
-      }, 2));
+    console.log('*** here ***'); // TODO
   }
   catch (err) {
     console.error('Error reading file "%s": %s', file, err.toString());

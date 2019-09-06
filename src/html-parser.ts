@@ -63,20 +63,26 @@ export class HtmlParser {
   private currentTag = '';
   private currentTagLc = '';
   private dom = new DomModel();
+  private htmlSource: string;
+  private htmlSourceDone: boolean;
   private leadingSpace = '';
   private lineNumber  = 1;
+  private nextChunk = '';
+  private nextChunkIsFinal: boolean;
   readonly options: HtmlParserOptions;
+  private parserFinished = false;
   private parsingResolver: (node: DomNode) => void;
+  private parserStarted = false;
   private pendingSource = '';
   private preEqualsSpace = '';
   private putBacks: string[] = [];
-  private srcIndex = 0;
+  private resolveNextChunk: (gotMoreChars: string) => void;
+  private sourceIndex = 0;
   private state = State.OUTSIDE_MARKUP;
   private yieldTime = DEFAULT_YIELD_TIME;
   private xmlMode = false;
 
   constructor(
-    private htmlSource: string,
     options = DEFAULT_OPTIONS
   ) {
     this.options = {};
@@ -144,28 +150,58 @@ export class HtmlParser {
     return this;
   }
 
-  parse(): DomNode {
-    if (!this.callbackEnd)
-      throw new Error('onEnd callback must be specified');
+  parse(source: string, yieldTime = DEFAULT_YIELD_TIME, done = true): Promise<DomNode> {
+    this.parserStarted = true;
+    this.htmlSource = source;
+    this.htmlSourceDone = done;
 
     this.callbackCloseTag = this.callbackCloseTag || this.callbackUnhandled;
     this.callbackText = this.callbackText || this.callbackUnhandled;
 
-    this.parseLoop();
-
-    return this.dom.getRoot();
-  }
-
-  async parseAsync(yieldTime = DEFAULT_YIELD_TIME): Promise<DomNode> {
-    this.yieldTime = yieldTime;
-    setTimeout(() => this.parseLoop());
-
     return new Promise<DomNode>(resolve => {
+      this.yieldTime = yieldTime;
       this.parsingResolver = resolve;
+
+      const parse = () => {
+        this.parseLoop().then(() => {
+          if (!this.parserFinished)
+            setTimeout(parse);
+          else
+            resolve();
+        });
+      };
+
+      setTimeout(parse);
     });
   }
 
-  private parseLoop(): void {
+  parseChunk(chunk: string, done = false, yieldTime = DEFAULT_YIELD_TIME) {
+    if (!this.parserStarted) {
+      // noinspection JSIgnoredPromiseFromCall
+      this.parse(chunk, yieldTime, done);
+
+      return;
+    }
+
+    if (this.htmlSourceDone)
+      throw new Error('Parse will no longer accept addition input');
+
+    this.htmlSourceDone = done || !chunk;
+
+    if (this.resolveNextChunk) {
+      if (!chunk)
+        this.resolveNextChunk('');
+      else {
+        this.htmlSource = (this.nextChunk || '') + chunk;
+        this.sourceIndex = 0;
+        this.resolveNextChunk(this.getChar());
+      }
+    }
+    else
+      this.nextChunk = (this.nextChunk || '') + chunk;
+  }
+
+  private async parseLoop(): Promise<void> {
     let ch: string;
     let content: string;
     let terminated: boolean;
@@ -175,9 +211,9 @@ export class HtmlParser {
     const startTime = processMillis();
 
     while (true) {
-      ch = this.getChar();
+      ch = this.getChar() || await this.getNextChunkChar();
 
-      if (ch === undefined)
+      if (!ch)
         break;
       else if (isWhiteSpace(ch)) {
         this.collectedSpace += ch;
@@ -188,7 +224,7 @@ export class HtmlParser {
         case State.OUTSIDE_MARKUP:
           this.putBack(ch);
 
-          let [text, nextWSStart] = this.gatherText();
+          let [text, nextWSStart] = await this.gatherText();
           if (text) {
             const collected = this.collectedSpace;
 
@@ -230,7 +266,7 @@ export class HtmlParser {
         break;
 
         case State.AT_OPEN_TAG_START:
-          this.gatherTagName(ch);
+          await this.gatherTagName(ch);
 
           node = new DomNode(this.currentTag);
           this.dom.prePush(node);
@@ -248,7 +284,7 @@ export class HtmlParser {
         break;
 
         case State.AT_CLOSE_TAG_START:
-          this.gatherTagName(ch);
+          await this.gatherTagName(ch);
           this.state = State.IN_CLOSE_TAG;
           this.leadingSpace = this.collectedSpace;
           this.collectedSpace = '';
@@ -272,7 +308,7 @@ export class HtmlParser {
 
           if (ch === '/') {
             end = '/>';
-            ch = this.getChar();
+            ch = this.getChar() || await this.getNextChunkChar();
           }
 
           if (ch !== '>') {
@@ -284,7 +320,7 @@ export class HtmlParser {
             if (isAttributeNameChar(ch)) {
               this.leadingSpace = this.collectedSpace;
               this.collectedSpace = '';
-              this.gatherAttributeName(ch);
+              await this.gatherAttributeName(ch);
               this.state = State.AT_ATTRIBUTE_ASSIGNMENT;
             }
             else {
@@ -339,7 +375,7 @@ export class HtmlParser {
           }
           else {
             const quote = (ch === '"' || ch === "'") ? ch : '';
-            const value = this.gatherAttributeValue(quote, quote ? '' : ch);
+            const value = await this.gatherAttributeValue(quote, quote ? '' : ch);
 
             this.doAttributeCallback(this.preEqualsSpace + '=' + this.collectedSpace, value, quote);
             this.dom.addAttribute(this.attribute, value);
@@ -351,7 +387,7 @@ export class HtmlParser {
 
         case State.AT_DECLARATION_START:
           if (this.collectedSpace.length === 0 && ch === '-') {
-            const ch2 = this.getChar();
+            const ch2 = this.getChar() || await this.getNextChunkChar();
 
             if (ch2 === '-') {
               this.state = State.AT_COMMENT_START;
@@ -361,7 +397,7 @@ export class HtmlParser {
               this.putBack(ch2);
           }
 
-          [content, terminated, isCData] = this.gatherDeclarationOrProcessing(this.collectedSpace + ch,
+          [content, terminated, isCData] = await this.gatherDeclarationOrProcessing(this.collectedSpace + ch,
             this.dom.shouldParseCData());
 
           if (isCData) {
@@ -397,7 +433,7 @@ export class HtmlParser {
         break;
 
         case State.AT_PROCESSING_START:
-          [content, terminated] = this.gatherDeclarationOrProcessing(this.collectedSpace + ch);
+          [content, terminated] = await this.gatherDeclarationOrProcessing(this.collectedSpace + ch);
 
           this.dom.addChild(new ProcessingElement(content), this.leadingSpace);
 
@@ -420,7 +456,7 @@ export class HtmlParser {
         break;
 
         case State.AT_COMMENT_START:
-          [content, terminated] = this.gatherComment(this.collectedSpace + ch);
+          [content, terminated] = await this.gatherComment(this.collectedSpace + ch);
 
           this.dom.addChild(new CommentElement(content), this.leadingSpace);
 
@@ -442,7 +478,7 @@ export class HtmlParser {
         case State.IN_TEXT_AREA_ELEMENT:
           const tag = tagForState[this.state];
 
-          [content, closeTag, terminated] = this.gatherUntilEndTag(tag, ch);
+          [content, closeTag, terminated] = await this.gatherUntilEndTag(tag, ch);
 
           if (!terminated)
             this.reportError(`File ended in unterminated ${tag} section`);
@@ -475,16 +511,16 @@ export class HtmlParser {
         break;
       }
 
-      if (this.parsingResolver && processMillis() >= startTime + this.yieldTime) {
-        setTimeout(() => this.parseLoop());
-        return;
-      }
+      // TODO
+      // if (this.parsingResolver && processMillis() >= startTime + this.yieldTime)
+      //   return;
     }
 
     if (this.state !== State.OUTSIDE_MARKUP)
       this.callbackError('Unexpected end of file', this.lineNumber, this.column);
 
     this.callbackEnd(this.collectedSpace, this.dom.getRoot(), this.dom.getUnclosedTagCount());
+    this.parserFinished = true;
 
     if (this.parsingResolver)
       this.parsingResolver(this.dom.getRoot());
@@ -541,13 +577,13 @@ export class HtmlParser {
       return ch;
     }
 
-    if (this.srcIndex >= this.htmlSource.length)
-      return undefined;
+    if (this.sourceIndex >= this.htmlSource.length)
+      return '';
     else {
-      ch = this.htmlSource.charAt(this.srcIndex++);
+      ch = this.htmlSource.charAt(this.sourceIndex++);
 
-      if (ch === '\r' && this.htmlSource.charAt(this.srcIndex) === '\n') {
-        ++this.srcIndex;
+      if (ch === '\r' && this.htmlSource.charAt(this.sourceIndex) === '\n') {
+        ++this.sourceIndex;
         ch += '\n';
       }
     }
@@ -565,11 +601,11 @@ export class HtmlParser {
       ++this.column;
 
       if (0xD800 <= cp && cp <= 0xDBFF) {
-        const ch2 = this.htmlSource.charAt(this.srcIndex);
+        const ch2 = this.htmlSource.charAt(this.sourceIndex); // TODO
         const cp2 = (ch2 && ch2.charCodeAt(0)) || 0;
 
         if (0xDC00 <= cp2 && cp2 <= 0xDFFF) {
-          ++this.srcIndex;
+          ++this.sourceIndex;
           ch += ch2;
         }
       }
@@ -590,23 +626,40 @@ export class HtmlParser {
       --this.column;
   }
 
-  private gatherText(): [string, number] {
+  private async getNextChunkChar(): Promise<string> {
+    if (this.htmlSourceDone && (!this.htmlSource || this.sourceIndex >= this.htmlSource.length))
+      return '';
+    else if (this.nextChunk) {
+      this.htmlSource = this.nextChunk;
+      this.htmlSourceDone = this.nextChunkIsFinal;
+      this.sourceIndex = 0;
+      return this.getChar();
+    }
+
+    return new Promise<string>(resolve => {
+      this.resolveNextChunk = resolve;
+    });
+  }
+
+  private async gatherText(): Promise<[string, number]> {
     let text = '';
     let ch: string;
     let nextWSStart = -1;
     let mightNeedRepair = false;
 
-    while (isWhiteSpace(ch = this.getChar()))
+    while (isWhiteSpace(ch = this.getChar() || await this.getNextChunkChar()))
       this.collectedSpace += ch;
 
     this.putBack(ch);
 
-    while ((ch = this.getChar()) !== undefined) {
+    while (true) {
+      ch = this.getChar() || await this.getNextChunkChar();
+
       if (ch === '<') {
-        const ch2 = this.getChar();
+        const ch2 = this.getChar() || await this.getNextChunkChar();
 
         if (ch2 === '/') {
-          const ch3 = this.getChar();
+          const ch3 = this.getChar() || await this.getNextChunkChar();
 
           if (ch3 !== '/' && isMarkupStart(ch3)) {
             this.putBack(ch3);
@@ -648,36 +701,36 @@ export class HtmlParser {
     return [text, nextWSStart];
   }
 
-  private gatherTagName(init = ''): void {
+  private async gatherTagName(init = ''): Promise<void> {
     this.currentTag = init;
 
     let ch: string;
 
-    while (isPCENChar(ch = this.getChar()))
+    while (isPCENChar(ch = this.getChar() || await this.getNextChunkChar()))
       this.currentTag += ch;
 
     this.currentTagLc = this.xmlMode ? this.currentTag : this.currentTag.toLowerCase();
     this.putBack(ch);
   }
 
-  private gatherAttributeName(init = ''): void {
+  private async gatherAttributeName(init = ''): Promise<void> {
     this.attribute = init;
 
     let ch: string;
 
-    while (isAttributeNameChar(ch = this.getChar()))
+    while (isAttributeNameChar(ch = this.getChar() || await this.getNextChunkChar()))
       this.attribute += ch;
 
     this.putBack(ch);
   }
 
-  private gatherAttributeValue(quote: string, init = ''): string {
+  private async gatherAttributeValue(quote: string, init = ''): Promise<string> {
     let value = init;
 
     let ch: string;
     let afterSlash = false;
 
-    while ((ch = this.getChar()) && ch !== quote && (quote || (!isWhiteSpace(ch) && ch !== '>'))) {
+    while ((ch = this.getChar() || await this.getNextChunkChar()) && ch !== quote && (quote || (!isWhiteSpace(ch) && ch !== '>'))) {
       value += ch;
       afterSlash = ch === '/';
     }
@@ -694,12 +747,12 @@ export class HtmlParser {
     return value;
   }
 
-  private gatherComment(init = ''): [string, boolean] {
+  private async gatherComment(init = ''): Promise<[string, boolean]> {
     let comment = init;
     let stage = (init === '-' ? 1 : 0);
     let ch: string;
 
-    while ((ch = this.getChar())) {
+    while ((ch = this.getChar() || await this.getNextChunkChar())) {
       comment += ch;
 
       if (stage === 0 && ch === '-')
@@ -716,7 +769,7 @@ export class HtmlParser {
     return [comment, false];
   }
 
-  private gatherDeclarationOrProcessing(init = '', checkForCData?: boolean): [string, boolean, boolean] {
+  private async gatherDeclarationOrProcessing(init = '', checkForCData?: boolean): Promise<[string, boolean, boolean]> {
     if (init === '>')
       return ['', true, false];
 
@@ -724,7 +777,7 @@ export class HtmlParser {
     let ch: string;
     let cdataDetected = false;
 
-    while ((ch = this.getChar())) {
+    while ((ch = this.getChar() || await this.getNextChunkChar())) {
       if (checkForCData && content.length === 7) {
         cdataDetected = (content === '[CDATA[');
       }
@@ -738,14 +791,14 @@ export class HtmlParser {
     return [content, false, false];
   }
 
-  private gatherUntilEndTag(endTag: string, init = ''): [string, string, boolean] {
+  private async gatherUntilEndTag(endTag: string, init = ''): Promise<[string, string, boolean]> {
     const ender = '</' + endTag;
     const len = ender.length;
     let content = init;
     let endStage = 0;
     let ch: string;
 
-    while ((ch = this.getChar())) {
+    while ((ch = this.getChar() || await this.getNextChunkChar())) {
       content += ch;
 
       if (endStage >= len && ch === '>')

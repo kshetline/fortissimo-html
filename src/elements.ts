@@ -24,8 +24,8 @@ export const SPECIAL_ELEMENTS = new Set(['address', 'applet', 'area', 'article',
 
 export const FOSTER_PARENT_SPECIAL_TARGETS = new Set(['table', 'tbody', 'tfoot', 'thead', 'tr']);
 
-// FORM_TAGS, P_TAG, and OPEN_IMPLIES_CLOSE were taken from (then modified slightly):
-// https://github.com/fb55/htmlparser2/blob/master/src/Parser.ts
+// FORM_TAGS, P_TAG, and OPEN_IMPLIES_CLOSE were taken from:
+// https://github.com/fb55/htmlparser2/blob/master/src/Parser.ts (then modified slightly)
 
 export const FORM_TAGS = new Set([
     'input',
