@@ -462,6 +462,8 @@ export class HtmlParser {
                 if (bailout) {
                   this.parsingResolver(null);
                   this.reset();
+                  this.parserFinished = true;
+                  return;
                 }
               }
             }
