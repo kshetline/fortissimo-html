@@ -61,6 +61,12 @@ async function processFile(file: string): Promise<void> {
         logProgress('declaration:', '<!' + declaration + '>' + ' (' + depth + ')');
         rebuilt += leading + '<!' + declaration + '>';
       })
+      .onEncoding(encoding => {
+        if (logStatsFlag)
+          console.log('*** Encoding: %s', encoding);
+
+        return false;
+      })
       .onEnd((trailing, domRoot, unclosed) => {
         rebuilt += trailing;
 

@@ -40,6 +40,7 @@ const tagForState = {
 
 type AttributeCallback = (leadingSpace: string, name: string, equalSign: string, value: string, quote: string) => void;
 type BasicCallback = (depth: number, leadingSpace: string, text: string, trailing?: string) => void;
+type EncodingCallback = (encoding: string, normalizedEncoding?: string, explicit?: boolean) => boolean;
 type EndCallback = (finalSpace?: string, dom?: DomNode, unclosedTagCount?: number) => void;
 type ErrorCallback = (error: string, line?: number, column?: number, source?: string) => void;
 
@@ -49,6 +50,7 @@ export class HtmlParser {
   private callbackCData: BasicCallback;
   private callbackComment: BasicCallback;
   private callbackDeclaration: BasicCallback;
+  private callbackEncoding: EncodingCallback;
   private callbackEnd: EndCallback;
   private callbackError: ErrorCallback;
   private callbackOpenTagEnd: BasicCallback;
@@ -59,8 +61,11 @@ export class HtmlParser {
   private callbackUnhandled: BasicCallback;
 
   private attribute = '';
+  private charset = '';
+  private checkingCharset = false;
   private collectedSpace = '';
   private column = 0;
+  private contentType = false;
   private currentTag = '';
   private currentTagLc = '';
   private dom = new DomModel();
@@ -74,6 +79,7 @@ export class HtmlParser {
   private parserFinished = false;
   private parsingResolver: (node: DomNode) => void;
   private parserStarted = false;
+  private pendingCharset = '';
   private pendingSource = '';
   private preEqualsSpace = '';
   private putBacks: string[] = [];
@@ -113,6 +119,11 @@ export class HtmlParser {
 
   onDeclaration(callback: BasicCallback): HtmlParser {
     this.callbackDeclaration = callback;
+    return this;
+  }
+
+  onEncoding(callback: EncodingCallback): HtmlParser {
+    this.callbackEncoding = callback;
     return this;
   }
 
@@ -156,7 +167,61 @@ export class HtmlParser {
     return this;
   }
 
-  parse(source = '', yieldTime = DEFAULT_YIELD_TIME, isFinal = !!source): Promise<DomNode> {
+  async parse(source = '', yieldTime = DEFAULT_YIELD_TIME): Promise<DomNode> {
+    return this.parseAux(source, yieldTime, !!source);
+  }
+
+  parseChunk(chunk: string, isFinal = false, yieldTime = DEFAULT_YIELD_TIME) {
+    if (!this.parserStarted) {
+      // noinspection JSIgnoredPromiseFromCall
+      this.parseAux(chunk, yieldTime, isFinal);
+
+      return;
+    }
+
+    if (this.htmlSourceIsFinal)
+      throw new Error('Parse will no longer accept addition input');
+
+    this.htmlSourceIsFinal = isFinal || !chunk;
+
+    if (this.resolveNextChunk) {
+      if (!chunk)
+        this.resolveNextChunk('');
+      else {
+        this.htmlSource = (this.nextChunk || '') + chunk;
+        this.sourceIndex = 0;
+        this.resolveNextChunk(this.getChar());
+      }
+    }
+    else
+      this.nextChunk = (this.nextChunk || '') + chunk;
+  }
+
+  reset(): void {
+    this.charset = '';
+    this.checkingCharset = false;
+    this.collectedSpace = '';
+    this.column = 0;
+    this.contentType = false;
+    this.dom = new DomModel();
+    this.htmlSource = '';
+    this.htmlSourceIsFinal = false;
+    this.leadingSpace = '';
+    this.lineNumber  = 1;
+    this.nextChunk = '';
+    this.nextChunkIsFinal = false;
+    this.parserFinished = false;
+    this.parserStarted = false;
+    this.pendingCharset = '';
+    this.pendingSource = '';
+    this.putBacks = [];
+    this.resolveNextChunk = null;
+    this.sourceIndex = 0;
+    this.state = State.OUTSIDE_MARKUP;
+    this.xmlMode = false;
+  }
+
+  private async parseAux(source = '', yieldTime = DEFAULT_YIELD_TIME, isFinal = !!source): Promise<DomNode> {
     this.parserStarted = true;
     this.htmlSource = source || '';
     this.htmlSourceIsFinal = isFinal;
@@ -179,32 +244,6 @@ export class HtmlParser {
 
       setTimeout(parse);
     });
-  }
-
-  parseChunk(chunk: string, isFinal = false, yieldTime = DEFAULT_YIELD_TIME) {
-    if (!this.parserStarted) {
-      // noinspection JSIgnoredPromiseFromCall
-      this.parse(chunk, yieldTime, isFinal);
-
-      return;
-    }
-
-    if (this.htmlSourceIsFinal)
-      throw new Error('Parse will no longer accept addition input');
-
-    this.htmlSourceIsFinal = isFinal || !chunk;
-
-    if (this.resolveNextChunk) {
-      if (!chunk)
-        this.resolveNextChunk('');
-      else {
-        this.htmlSource = (this.nextChunk || '') + chunk;
-        this.sourceIndex = 0;
-        this.resolveNextChunk(this.getChar());
-      }
-    }
-    else
-      this.nextChunk = (this.nextChunk || '') + chunk;
   }
 
   private async parseLoop(): Promise<void> {
@@ -278,6 +317,7 @@ export class HtmlParser {
           this.dom.prePush(node);
           this.dom.addChild(node, this.collectedSpace);
           this.dom.push(node);
+          this.checkingCharset = (!this.charset && this.currentTagLc === 'meta');
 
           if (this.callbackOpenTagStart)
             this.callbackOpenTagStart(this.dom.getDepth(), this.collectedSpace, this.currentTag);
@@ -342,6 +382,9 @@ export class HtmlParser {
 
             this.collectedSpace = '';
             this.pendingSource = '';
+            this.checkingCharset = false;
+            this.contentType = false;
+            this.pendingCharset = '';
 
             if (end.length > 1 || (!this.xmlMode && VOID_ELEMENTS.has(this.currentTagLc))) {
               this.pop(null);
@@ -386,6 +429,34 @@ export class HtmlParser {
             this.doAttributeCallback(this.preEqualsSpace + '=' + this.collectedSpace, value, quote);
             this.dom.addAttribute(this.attribute, value);
             this.collectedSpace = '';
+
+            if (this.checkingCharset) {
+              const attribLc = this.attribute.toLowerCase();
+
+              if (attribLc === 'charset')
+                this.charset = value.trim();
+              else if (attribLc === 'http-equiv' && value.toLowerCase() === 'content-type') {
+                this.contentType = true;
+                this.charset = this.pendingCharset;
+              }
+              else if (attribLc === 'content') {
+                const charset = (/\bcharset\s*=\s*([\w\-]+)\b/i.exec(value) || [])[1];
+
+                if (this.contentType)
+                  this.charset = charset;
+                else
+                  this.pendingCharset = charset;
+              }
+
+              if (this.charset && this.callbackEncoding) {
+                const bailout = this.callbackEncoding(this.charset, this.charset.toLowerCase().replace(/:\d{4}$|[^0-9a-z]/g, ''), true);
+
+                if (bailout) {
+                  this.parsingResolver(null);
+                  this.reset();
+                }
+              }
+            }
           }
 
           this.state = State.AT_ATTRIBUTE_START;
