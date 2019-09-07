@@ -1,4 +1,5 @@
-import { FORMATTING_ELEMENTS, FOSTER_PARENT_SPECIAL_TARGETS, MARKER_ELEMENTS, OPEN_IMPLIES_CLOSE, SCOPE_ELEMENTS, SPECIAL_ELEMENTS } from './elements';
+import { FORMATTING_ELEMENTS, FOSTER_PARENT_SPECIAL_TARGETS, MARKER_ELEMENTS, OPEN_IMPLIES_CLOSE,
+  SCOPE_ELEMENTS, SPECIAL_ELEMENTS } from './elements';
 
 function last<T>(array: T[]): T {
   if (array && array.length > 0)
@@ -59,6 +60,23 @@ export class DeclarationElement extends DomElement {
 
   toString(): string {
     return '<!' + this.content + '>';
+  }
+}
+
+export class DocType extends DeclarationElement {
+  type: 'html' | 'xhtml';
+  variety: 'frameset' | 'strict' | 'transitional';
+  version: string;
+
+  constructor(content: string) {
+    super(content);
+
+    this.type = /\bxhtml\b/i.test(content) ? 'xhtml' : 'html';
+    this.variety = (/\b(frameset|strict|transitional)\b/i.exec(content.toLowerCase()) || [])[1] as any;
+    this.version = (/\bx?html\s*([.\d]+)\b/i.exec(content) || [])[1] as any;
+
+    if (!this.version && /^doctype\s+html\s*$/i.test(content))
+      this.version = '5';
   }
 }
 
@@ -229,14 +247,16 @@ export class DomModel {
     if (!this.xmlMode) {
       this.reconstructFormattingIfNeeded();
 
-      if (this.inTable > 0 && child instanceof DomNode && /^(td|th)$/.test(child.tagLc) && this.currentNode.tagLc !== 'tr') {
+      if (this.inTable > 0 && child instanceof DomNode && /^(td|th)$/.test(child.tagLc) &&
+          this.currentNode.tagLc !== 'tr') {
         const newParent = new DomNode('tr', false, true);
 
         this.addChild(newParent, '', child.tagLc === 'th');
         this.openStack.push(newParent);
         this.currentNode = newParent;
       }
-      else if (this.inTable > 0 && child instanceof DomNode && child.tagLc === 'tr' &&  !/^(tbody|thead|table)$/.test(this.currentNode.tagLc)) {
+      else if (this.inTable > 0 && child instanceof DomNode && child.tagLc === 'tr' &&
+               !/^(tbody|thead|table)$/.test(this.currentNode.tagLc)) {
         const newParent = new DomNode(pending_th ? 'thead' : 'tbody', false, true);
 
         this.addChild(newParent);
@@ -379,7 +399,7 @@ export class DomModel {
     return [fosterParent, insertionIndex];
   }
 
-  private invokeAdoptionAgency(tagLc: string): boolean[] {
+  private invokeAdoptionAgency(tagLc: string): [boolean, boolean] {
     // The following is adapted from https://html.spec.whatwg.org/multipage/parsing.html#adoptionAgency.
     let formatElem: DomNode;
     let popped = false;

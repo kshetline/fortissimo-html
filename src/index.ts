@@ -49,8 +49,8 @@ async function processFile(file: string): Promise<void> {
         logProgress('CDATA:', '<![CDATA[' + cdata + ']]>' + ' (' + depth + ')');
         rebuilt += leading + '<![CDATA[' + cdata + ']]>';
       })
-      .onCloseTag((depth, leading, tag, trailing) => {
-        logProgress('close:', '</' + tag + trailing + '>' + ' (' + depth + ')');
+      .onEndTag((depth, leading, tag, trailing) => {
+        logProgress('end:', '</' + tag + trailing + '>' + ' (' + depth + ')');
         rebuilt += leading + '</' + tag + trailing + '>';
       })
       .onComment((depth, leading, comment) => {
@@ -60,6 +60,13 @@ async function processFile(file: string): Promise<void> {
       .onDeclaration((depth, leading, declaration) => {
         logProgress('declaration:', '<!' + declaration + '>' + ' (' + depth + ')');
         rebuilt += leading + '<!' + declaration + '>';
+      })
+      .onDocType((leading, docType) => {
+        if (logStatsFlag)
+          console.log('DOCTYPE: %s%s%s', docType.type.toUpperCase(), docType.variety ? ' ' + docType.variety : '',
+            docType.version ? ' ' + docType.version : '');
+
+        rebuilt += leading + '<!' + docType.content + '>';
       })
       .onEncoding(encoding => {
         if (logStatsFlag)
@@ -109,17 +116,17 @@ async function processFile(file: string): Promise<void> {
         logErrors('*** %s: [%s, %s]', error, line, col);
         rebuilt += source || '';
       })
-      .onOpenTagEnd((depth, leading, tag, end) => {
-        logProgress('tag end:', end + ' (' + depth + ')');
-        rebuilt += leading + end;
-      })
-      .onOpenTagStart((depth, leading, tag) => {
-        logProgress('tag:', tag + ' (' + depth + ')');
-        rebuilt += leading + '<' + tag;
-      })
       .onProcessing((depth, leading, processing) => {
         logProgress('processing:', '<?' + processing + '>' + ' (' + depth + ')');
         rebuilt += leading + '<?' + processing + '>';
+      })
+      .onStartTagEnd((depth, leading, tag, end) => {
+        logProgress('tag end:', end + ' (' + depth + ')');
+        rebuilt += leading + end;
+      })
+      .onStartTagStart((depth, leading, tag) => {
+        logProgress('tag:', tag + ' (' + depth + ')');
+        rebuilt += leading + '<' + tag;
       })
       .onText((depth, leading, text, trailing) => {
         logProgress('text:', leading + text + trailing + ' (' + depth + ')');

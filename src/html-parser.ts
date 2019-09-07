@@ -1,7 +1,8 @@
 import { processMillis } from './util';
 import { VOID_ELEMENTS } from './elements';
 import { fixBadChars, isAttributeNameChar, isMarkupStart, isPCENChar, isWhiteSpace } from './characters';
-import { CData, CommentElement, DeclarationElement, DomModel, DomNode, ProcessingElement, TextElement } from './dom';
+import { CData, CommentElement, DeclarationElement, DocType, DomModel, DomNode, ProcessingElement,
+  TextElement } from './dom';
 
 export interface HtmlParserOptions {
   eol?: string | boolean;
@@ -11,12 +12,12 @@ export interface HtmlParserOptions {
 enum State {
   OUTSIDE_MARKUP,
   AT_MARKUP_START,
-  AT_CLOSE_TAG_START,
-  IN_CLOSE_TAG,
+  AT_END_TAG_START,
+  IN_END_TAG,
   AT_DECLARATION_START,
   AT_COMMENT_START,
   AT_PROCESSING_START,
-  AT_OPEN_TAG_START,
+  AT_START_TAG_START,
   AT_ATTRIBUTE_START,
   AT_ATTRIBUTE_ASSIGNMENT,
   AT_ATTRIBUTE_VALUE,
@@ -40,23 +41,25 @@ const tagForState = {
 
 type AttributeCallback = (leadingSpace: string, name: string, equalSign: string, value: string, quote: string) => void;
 type BasicCallback = (depth: number, leadingSpace: string, text: string, trailing?: string) => void;
+type DocTypeCallback = (leadingSpace: string, docType: DocType) => void;
 type EncodingCallback = (encoding: string, normalizedEncoding?: string, explicit?: boolean) => boolean;
 type EndCallback = (finalSpace?: string, dom?: DomNode, unclosedTagCount?: number) => void;
 type ErrorCallback = (error: string, line?: number, column?: number, source?: string) => void;
 
 export class HtmlParser {
   private callbackAttribute: AttributeCallback;
-  private callbackCloseTag: BasicCallback;
   private callbackCData: BasicCallback;
   private callbackComment: BasicCallback;
   private callbackDeclaration: BasicCallback;
+  private callbackDocType: DocTypeCallback;
   private callbackEncoding: EncodingCallback;
   private callbackEnd: EndCallback;
+  private callbackEndTag: BasicCallback;
   private callbackError: ErrorCallback;
-  private callbackOpenTagEnd: BasicCallback;
-  private callbackOpenTagStart: BasicCallback;
   private callbackProcessing: BasicCallback;
   private callbackRequestData: () => void;
+  private callbackStartTagEnd: BasicCallback;
+  private callbackStartTagStart: BasicCallback;
   private callbackText: BasicCallback;
   private callbackUnhandled: BasicCallback;
 
@@ -107,11 +110,6 @@ export class HtmlParser {
     return this;
   }
 
-  onCloseTag(callback: BasicCallback): HtmlParser {
-    this.callbackCloseTag = callback;
-    return this;
-  }
-
   onComment(callback: BasicCallback): HtmlParser {
     this.callbackComment = callback;
     return this;
@@ -119,6 +117,11 @@ export class HtmlParser {
 
   onDeclaration(callback: BasicCallback): HtmlParser {
     this.callbackDeclaration = callback;
+    return this;
+  }
+
+  onDocType(callback: DocTypeCallback): HtmlParser {
+    this.callbackDocType = callback;
     return this;
   }
 
@@ -132,18 +135,13 @@ export class HtmlParser {
     return this;
   }
 
+  onEndTag(callback: BasicCallback): HtmlParser {
+    this.callbackEndTag = callback;
+    return this;
+  }
+
   onError(callback: ErrorCallback): HtmlParser {
     this.callbackError = callback;
-    return this;
-  }
-
-  onOpenTagEnd(callback: BasicCallback): HtmlParser {
-    this.callbackOpenTagEnd = callback;
-    return this;
-  }
-
-  onOpenTagStart(callback: BasicCallback): HtmlParser {
-    this.callbackOpenTagStart = callback;
     return this;
   }
 
@@ -154,6 +152,16 @@ export class HtmlParser {
 
   onRequestData(callback: () => void): HtmlParser {
     this.callbackRequestData = callback;
+    return this;
+  }
+
+  onStartTagEnd(callback: BasicCallback): HtmlParser {
+    this.callbackStartTagEnd = callback;
+    return this;
+  }
+
+  onStartTagStart(callback: BasicCallback): HtmlParser {
+    this.callbackStartTagStart = callback;
     return this;
   }
 
@@ -226,7 +234,7 @@ export class HtmlParser {
     this.htmlSource = source || '';
     this.htmlSourceIsFinal = isFinal;
 
-    this.callbackCloseTag = this.callbackCloseTag || this.callbackUnhandled;
+    this.callbackEndTag = this.callbackEndTag || this.callbackUnhandled;
     this.callbackText = this.callbackText || this.callbackUnhandled;
 
     return new Promise<DomNode>(resolve => {
@@ -251,7 +259,7 @@ export class HtmlParser {
     let content: string;
     let terminated: boolean;
     let isCData: boolean;
-    let closeTag: string;
+    let endTag: string;
     let node: DomNode;
     const startTime = processMillis();
 
@@ -294,7 +302,7 @@ export class HtmlParser {
         case State.AT_MARKUP_START:
           switch (ch) {
             case '/':
-              this.state = State.AT_CLOSE_TAG_START;
+              this.state = State.AT_END_TAG_START;
             break;
 
             case '!':
@@ -305,12 +313,12 @@ export class HtmlParser {
             break;
 
             default:
-              this.state = State.AT_OPEN_TAG_START;
+              this.state = State.AT_START_TAG_START;
               this.putBack(ch);
           }
         break;
 
-        case State.AT_OPEN_TAG_START:
+        case State.AT_START_TAG_START:
           await this.gatherTagName(ch);
 
           node = new DomNode(this.currentTag);
@@ -319,8 +327,8 @@ export class HtmlParser {
           this.dom.push(node);
           this.checkingCharset = (!this.charset && this.currentTagLc === 'meta');
 
-          if (this.callbackOpenTagStart)
-            this.callbackOpenTagStart(this.dom.getDepth(), this.collectedSpace, this.currentTag);
+          if (this.callbackStartTagStart)
+            this.callbackStartTagStart(this.dom.getDepth(), this.collectedSpace, this.currentTag);
           else if (this.callbackUnhandled)
             this.callbackUnhandled(this.dom.getDepth(), this.collectedSpace, '<' + this.currentTag);
 
@@ -329,23 +337,23 @@ export class HtmlParser {
           this.state = State.AT_ATTRIBUTE_START;
         break;
 
-        case State.AT_CLOSE_TAG_START:
+        case State.AT_END_TAG_START:
           await this.gatherTagName(ch);
-          this.state = State.IN_CLOSE_TAG;
+          this.state = State.IN_END_TAG;
           this.leadingSpace = this.collectedSpace;
           this.collectedSpace = '';
         break;
 
-        case State.IN_CLOSE_TAG:
+        case State.IN_END_TAG:
           if (ch !== '>') {
             this.putBack(ch);
             this.pop(this.currentTagLc);
-            this.reportError('Syntax error in close tag');
+            this.reportError('Syntax error in end tag');
             break;
           }
           else {
             this.pop(this.currentTagLc);
-            this.doCloseTagCallback(this.leadingSpace, this.currentTag, this.collectedSpace);
+            this.doEndTagCallback(this.leadingSpace, this.currentTag, this.collectedSpace);
           }
         break;
 
@@ -375,8 +383,8 @@ export class HtmlParser {
             }
           }
           else {
-            if (this.callbackOpenTagEnd)
-              this.callbackOpenTagEnd(this.dom.getDepth(), this.collectedSpace, this.currentTag, end);
+            if (this.callbackStartTagEnd)
+              this.callbackStartTagEnd(this.dom.getDepth(), this.collectedSpace, this.currentTag, end);
             else if (this.callbackUnhandled)
               this.callbackUnhandled(this.dom.getDepth(), this.collectedSpace, end);
 
@@ -487,6 +495,23 @@ export class HtmlParser {
             else if (this.callbackUnhandled)
               this.callbackUnhandled(this.dom.getDepth() + 1, this.leadingSpace, '<![CDATA[' + content + ']]>');
           }
+          else if (/^doctype\b/i.test(content)) {
+            const docType = new DocType(content);
+
+            this.dom.addChild(docType, this.leadingSpace);
+
+            if (!terminated)
+              this.reportError('File ended in unterminated doctype');
+            else if (this.callbackDocType)
+              this.callbackDocType(this.leadingSpace, docType);
+            else if (this.callbackDeclaration)
+              this.callbackDeclaration(this.dom.getDepth() + 1, this.leadingSpace, content);
+            else if (this.callbackUnhandled)
+              this.callbackUnhandled(this.dom.getDepth() + 1, this.leadingSpace, '<!' + content + '>');
+
+            this.xmlMode = (docType.type === 'xhtml');
+            this.dom.setXmlMode(this.xmlMode);
+          }
           else {
             this.dom.addChild(new DeclarationElement(content), this.leadingSpace);
 
@@ -496,11 +521,6 @@ export class HtmlParser {
               this.callbackDeclaration(this.dom.getDepth() + 1, this.leadingSpace, content);
             else if (this.callbackUnhandled)
               this.callbackUnhandled(this.dom.getDepth() + 1, this.leadingSpace, '<!' + content + '>');
-
-            if (/^DOCTYPE\b.*\bXHTML\b/.test(content) && this.dom.canDoXmlMode()) {
-              this.xmlMode = true;
-              this.dom.setXmlMode(true);
-            }
           }
 
           this.collectedSpace = '';
@@ -555,7 +575,7 @@ export class HtmlParser {
         case State.IN_TEXT_AREA_ELEMENT:
           const tag = tagForState[this.state];
 
-          [content, closeTag, terminated] = await this.gatherUntilEndTag(tag, ch);
+          [content, endTag, terminated] = await this.gatherUntilEndTag(tag, ch);
 
           if (!terminated)
             this.reportError(`File ended in unterminated ${tag} section`);
@@ -580,10 +600,10 @@ export class HtmlParser {
               this.pendingSource = '';
             }
 
-            const $$ = new RegExp('^<\\/(' + tag + ')(\\s*)>$', 'i').exec(closeTag);
+            const $$ = new RegExp('^<\\/(' + tag + ')(\\s*)>$', 'i').exec(endTag);
 
             this.pop();
-            this.doCloseTagCallback('', $$[1], $$[2]);
+            this.doEndTagCallback('', $$[1], $$[2]);
           }
         break;
       }
@@ -614,9 +634,9 @@ export class HtmlParser {
     this.pendingSource = '';
   }
 
-  private doCloseTagCallback(leadingSpace: string, tag: string, trailing: string) {
-    if (this.callbackCloseTag)
-      this.callbackCloseTag(this.dom.getDepth() + 1, leadingSpace, tag, trailing);
+  private doEndTagCallback(leadingSpace: string, tag: string, trailing: string) {
+    if (this.callbackEndTag)
+      this.callbackEndTag(this.dom.getDepth() + 1, leadingSpace, tag, trailing);
     else if (this.callbackUnhandled)
       this.callbackUnhandled(this.dom.getDepth() + 1, this.leadingSpace, '</' + tag, trailing + '>');
 
