@@ -2,6 +2,10 @@ export function isWhiteSpace(ch: string) {
   return ch && ch <= ' ';
 }
 
+export function isEol(ch: string): boolean {
+  return ch === '\n' || ch === '\r' || ch === '\r\n';
+}
+
 export function isMarkupStart(ch: string) {
   return ch !== undefined && /[a-z\/!?]/i.test(ch);
 }

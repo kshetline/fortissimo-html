@@ -54,51 +54,19 @@ async function processFile(file: string): Promise<void> {
           logProgress('attribute:', name + equals.trim() + quote + value + quote);
           rebuilt += leading + name + equals + quote + value + quote;
         })
-        .onCData((depth, leading, cdata) => {
+        .onCData((depth, cdata) => {
           logProgress('CDATA:', '<![CDATA[' + cdata + ']]>' + ' (' + depth + ')');
-          rebuilt += leading + '<![CDATA[' + cdata + ']]>';
+          rebuilt += '<![CDATA[' + cdata + ']]>';
         })
-        .onEndTag((depth, leading, tag, trailing) => {
-          logProgress('end:', '</' + tag + trailing + '>' + ' (' + depth + ')');
-          rebuilt += leading + '</' + tag + trailing + '>';
+        .onEndTag((depth, tag, innerWhiteSpace: string) => {
+          logProgress('end:', '</' + tag + innerWhiteSpace + '>' + ' (' + depth + ')');
+          rebuilt += '</' + tag + innerWhiteSpace + '>';
         })
-        .onComment((depth, leading, comment) => {
+        .onComment((depth, comment) => {
           logProgress('comment:', comment + ' (' + depth + ')');
-          rebuilt += leading + '<!--' + comment + '-->';
+          rebuilt += '<!--' + comment + '-->';
         })
-        .onDeclaration((depth, leading, declaration) => {
-          logProgress('declaration:', '<!' + declaration + '>' + ' (' + depth + ')');
-          rebuilt += leading + '<!' + declaration + '>';
-        })
-        .onDocType((leading, docType) => {
-          if (logStatsFlag)
-            console.log('DOCTYPE: %s%s%s', docType.type.toUpperCase(), docType.variety ? ' ' + docType.variety : '',
-              docType.version ? ' ' + docType.version : '');
-
-          rebuilt += leading + '<!' + docType.content + '>';
-        })
-        .onEncoding((encoding, normalizedEncoding) => {
-          if (logStatsFlag)
-            console.log('*** Encoding: %s', encoding);
-
-          if (readEncoding === normalizedEncoding)
-            return false;
-
-          if (logWarningFlag)
-            console.warn('*** Attempted encoding %s did not match declared encoding %s', readEncoding, normalizedEncoding);
-
-          if (!iconv.encodingExists(normalizedEncoding)) {
-            logErrors('*** Encoding %s is not supported', normalizedEncoding);
-            tries = Number.MAX_SAFE_INTEGER;
-          }
-
-          readEncoding = normalizedEncoding;
-          done();
-
-          return true;
-        })
-        .onEnd((trailing, domRoot, unclosed) => {
-          rebuilt += trailing;
+        .onCompletion((domRoot, unclosed) => {
           dom = domRoot;
 
           const totalTime = processMillis() - startTime;
@@ -136,6 +104,37 @@ async function processFile(file: string): Promise<void> {
 
           done();
         })
+        .onDeclaration((depth, declaration) => {
+          logProgress('declaration:', '<!' + declaration + '>' + ' (' + depth + ')');
+          rebuilt += '<!' + declaration + '>';
+        })
+        .onDocType(docType => {
+          if (logStatsFlag)
+            console.log('DOCTYPE: %s%s%s', docType.type.toUpperCase(), docType.variety ? ' ' + docType.variety : '',
+              docType.version ? ' ' + docType.version : '');
+
+          rebuilt += '<!' + docType.content + '>';
+        })
+        .onEncoding((encoding, normalizedEncoding) => {
+          if (logStatsFlag)
+            console.log('*** Encoding: %s', encoding);
+
+          if (readEncoding === normalizedEncoding)
+            return false;
+
+          if (logWarningFlag)
+            console.warn('*** Attempted encoding %s did not match declared encoding %s', readEncoding, normalizedEncoding);
+
+          if (!iconv.encodingExists(normalizedEncoding)) {
+            logErrors('*** Encoding %s is not supported', normalizedEncoding);
+            tries = Number.MAX_SAFE_INTEGER;
+          }
+
+          readEncoding = normalizedEncoding;
+          done();
+
+          return true;
+        })
         .onError((error, line, col, source) => {
           if (source)
             logErrors('*** %s ***', source);
@@ -143,25 +142,25 @@ async function processFile(file: string): Promise<void> {
           logErrors('*** %s: [%s, %s]', error, line, col);
           rebuilt += source || '';
         })
-        .onProcessing((depth, leading, processing) => {
+        .onProcessing((depth, processing) => {
           logProgress('processing:', '<?' + processing + '>' + ' (' + depth + ')');
-          rebuilt += leading + '<?' + processing + '>';
+          rebuilt += '<?' + processing + '>';
         })
-        .onStartTagEnd((depth, leading, tag, end) => {
+        .onStartTagEnd((depth, innerWhiteSpace, end) => {
           logProgress('tag end:', end + ' (' + depth + ')');
-          rebuilt += leading + end;
+          rebuilt += innerWhiteSpace + end;
         })
-        .onStartTagStart((depth, leading, tag) => {
+        .onStartTagStart((depth, tag) => {
           logProgress('tag:', tag + ' (' + depth + ')');
-          rebuilt += leading + '<' + tag;
+          rebuilt += '<' + tag;
         })
-        .onText((depth, leading, text, trailing) => {
-          logProgress('text:', leading + text + trailing + ' (' + depth + ')');
-          rebuilt += leading + text + trailing;
+        .onText((depth, text) => {
+          logProgress('text:', text + ' (' + depth + ')');
+          rebuilt += text;
         })
-        .onUnhandled((depth, leading, text, trailing = '') => {
-          logProgress('???:', leading + text + trailing + ' (' + depth + ')');
-          rebuilt += leading + text + trailing;
+        .onUnhandled((depth, text) => {
+          logProgress('???:', text + '(' + depth + ')');
+          rebuilt += text;
         });
 
       await new Promise<void>(resolve => {

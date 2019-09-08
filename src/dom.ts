@@ -188,20 +188,8 @@ export class DomNode extends DomElement {
     this.quotes.push(quote);
   }
 
-  addChild(child: DomElement, leadingSpace?: string, textLine = 0, textColumn = 0): void {
+  addChild(child: DomElement): void {
     this.children = this.children || [];
-
-    if (leadingSpace) {
-      if (this.children.length > 0 && this.children[this.children.length - 1] instanceof TextElement)
-        this.children[this.children.length - 1].content += leadingSpace;
-      else {
-        const text = new TextElement(leadingSpace, textLine, textColumn);
-
-        text.parent = this;
-        this.children.push(text);
-      }
-    }
-
     child.parent = this;
     this.children.push(child);
   }
@@ -316,7 +304,7 @@ export class DomModel {
   }
 
 
-  addChild(child: DomElement, leadingSpace?: string, textLine = 0, textColumn = 0, pending_th = false): void {
+  addChild(child: DomElement, pending_th = false): void {
     if (!this.xmlMode) {
       this.reconstructFormattingIfNeeded();
 
@@ -324,7 +312,7 @@ export class DomModel {
           this.currentNode.tagLc !== 'tr') {
         const newParent = new DomNode('tr', 0, 0, false, true);
 
-        this.addChild(newParent, '', 0, 0, child.tagLc === 'th');
+        this.addChild(newParent, child.tagLc === 'th');
         this.openStack.push(newParent);
         this.currentNode = newParent;
       }
@@ -338,7 +326,7 @@ export class DomModel {
       }
     }
 
-    this.currentNode.addChild(child, leadingSpace, textLine, textColumn);
+    this.currentNode.addChild(child);
   }
 
   private reconstructFormattingIfNeeded(): void {
@@ -618,7 +606,7 @@ export class DomModel {
     return [popped, parseError];
   }
 
-  pop(tagLc?: string, line = 0, column = 0): boolean {
+  pop(tagLc: string, endTagText = '</' + tagLc + '>', line = 0, column = 0): boolean {
     let popped = false;
     let parseError = false;
 
