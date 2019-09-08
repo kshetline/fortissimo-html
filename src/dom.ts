@@ -22,8 +22,8 @@ export abstract class DomElement {
 
   protected constructor(
     public content: string,
-    public line: number,
-    public column: number
+    public readonly line: number,
+    public readonly column: number
   ) {}
 
   get depth(): number {
@@ -88,9 +88,9 @@ export class DeclarationElement extends DomElement {
 }
 
 export class DocType extends DeclarationElement {
-  type: 'html' | 'xhtml';
-  variety: 'frameset' | 'strict' | 'transitional';
-  version: string;
+  readonly type: 'html' | 'xhtml';
+  readonly variety: 'frameset' | 'strict' | 'transitional';
+  readonly version: string;
 
   constructor(
     content: string,
@@ -154,9 +154,12 @@ export class DomNode extends DomElement {
   attributes: string[];
   children: DomElement[];
   closureState = ClosureState.UNCLOSED;
+  equals: string[];
+  quotes: string[];
+  spacing: string[];
   synthetic?: boolean;
   tagLc: string;
-  values: Record<string, string>;
+  values: string[];
 
   constructor(
     public tag: string,
@@ -172,25 +175,35 @@ export class DomNode extends DomElement {
       this.synthetic = true;
   }
 
-  addAttribute(name: string, value: string): void {
-    // Ignore duplicate attribute names - first provided takes priority
-    if (this.values && name in this.values)
-      return;
-
+  addAttribute(name: string, value: string, leadingSpace = '', equals = '=', quote = '"'): void {
     this.attributes = this.attributes || [];
     this.attributes.push(name);
-    this.values = this.values || {};
-    this.values[name] = value;
+    this.values = this.values || [];
+    this.values.push(value);
+    this.spacing = this.spacing || [];
+    this.spacing.push(leadingSpace);
+    this.equals = this.equals || [];
+    this.equals.push(equals);
+    this.quotes = this.quotes || [];
+    this.quotes.push(quote);
   }
 
-  addChild(child: DomElement, leadingSpace?: string): void {
+  addChild(child: DomElement, leadingSpace?: string, textLine = 0, textColumn = 0): void {
     this.children = this.children || [];
 
-    if (this.children.length > 0 && this.children[this.children.length - 1] instanceof TextElement)
-      this.children[this.children.length - 1].content += leadingSpace || '';
+    if (leadingSpace) {
+      if (this.children.length > 0 && this.children[this.children.length - 1] instanceof TextElement)
+        this.children[this.children.length - 1].content += leadingSpace;
+      else {
+        const text = new TextElement(leadingSpace, textLine, textColumn);
 
-    this.children.push(child);
+        text.parent = this;
+        this.children.push(text);
+      }
+    }
+
     child.parent = this;
+    this.children.push(child);
   }
 
   removeChild(child: DomElement): boolean {
@@ -245,8 +258,9 @@ export class DomNode extends DomElement {
     json.depth = this.depth;
     json.closureState = this.closureState;
 
-    if (this.values)
-      json.value = this.values;
+    if (this.attributes && this.values)
+      json.values = this.attributes.reduce((values: any, attrib, index) =>
+        { values[attrib] = this.values[index]; return values; }, {});
 
     if (this.parent)
       json.parentTag = this.parent.tag;
@@ -273,8 +287,8 @@ export class DomModel {
     return this.root;
   }
 
-  addAttribute(name: string, value: string): void {
-    this.currentNode.addAttribute(name, value);
+  addAttribute(name: string, value: string, leadingSpace = '', equals = '=', quote = '"'): void {
+    this.currentNode.addAttribute(name, value, leadingSpace, equals, quote);
   }
 
   canDoXmlMode(): boolean {
@@ -301,7 +315,8 @@ export class DomModel {
     }
   }
 
-  addChild(child: DomElement, leadingSpace?: string, pending_th = false): void {
+
+  addChild(child: DomElement, leadingSpace?: string, textLine = 0, textColumn = 0, pending_th = false): void {
     if (!this.xmlMode) {
       this.reconstructFormattingIfNeeded();
 
@@ -309,7 +324,7 @@ export class DomModel {
           this.currentNode.tagLc !== 'tr') {
         const newParent = new DomNode('tr', 0, 0, false, true);
 
-        this.addChild(newParent, '', child.tagLc === 'th');
+        this.addChild(newParent, '', 0, 0, child.tagLc === 'th');
         this.openStack.push(newParent);
         this.currentNode = newParent;
       }
@@ -323,7 +338,7 @@ export class DomModel {
       }
     }
 
-    this.currentNode.addChild(child, leadingSpace);
+    this.currentNode.addChild(child, leadingSpace, textLine, textColumn);
   }
 
   private reconstructFormattingIfNeeded(): void {
