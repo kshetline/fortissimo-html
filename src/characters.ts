@@ -1,5 +1,5 @@
 export function isWhiteSpace(ch: string) {
-  return ch !== undefined && ch <= ' ';
+  return ch && ch <= ' ';
 }
 
 export function isMarkupStart(ch: string) {

@@ -11,6 +11,7 @@ function last<T>(array: T[]): T {
 export enum ClosureState {
   UNCLOSED,
   SELF_CLOSED,
+  VOID_CLOSED,
   EXPLICITLY_CLOSED,
   IMPLICITLY_CLOSED,
   PROGRAMMATICALLY_CLOSED
@@ -19,7 +20,11 @@ export enum ClosureState {
 export abstract class DomElement {
   parent: DomNode;
 
-  protected constructor(public content: string) {}
+  protected constructor(
+    public content: string,
+    public line: number,
+    public column: number
+  ) {}
 
   get depth(): number {
     let depth = -1;
@@ -35,12 +40,20 @@ export abstract class DomElement {
 
   // noinspection JSUnusedGlobalSymbols
   toJSON(): any {
-    return this.toString() + ' (' + this.depth + (this.parent ? ', ' + this.parent.tag : '') + ')';
+    return this.toString() + ' (' + this.depth +
+      (this.line ? `; ${this.line}, ${this.column}` : '') +
+      (this.parent ? '; ' + this.parent.tag : '') + ')';
   }
 }
 
 export class CData extends DomElement {
-  constructor(content: string) { super(content); }
+  constructor(
+    content: string,
+    line: number,
+    column: number
+  ) {
+    super(content, line, column);
+  }
 
   toString(): string {
     return '<![CDATA[' + this.content + ']]>';
@@ -48,7 +61,12 @@ export class CData extends DomElement {
 }
 
 export class CommentElement extends DomElement {
-  constructor(content: string) { super(content); }
+  constructor(content: string,
+    line: number,
+    column: number
+  ) {
+    super(content, line, column);
+  }
 
   toString(): string {
     return '<!--' + this.content + '-->';
@@ -56,7 +74,13 @@ export class CommentElement extends DomElement {
 }
 
 export class DeclarationElement extends DomElement {
-  constructor(content: string) { super(content); }
+  constructor(
+    content: string,
+    line: number,
+    column: number
+  ) {
+    super(content, line, column);
+  }
 
   toString(): string {
     return '<!' + this.content + '>';
@@ -68,8 +92,12 @@ export class DocType extends DeclarationElement {
   variety: 'frameset' | 'strict' | 'transitional';
   version: string;
 
-  constructor(content: string) {
-    super(content);
+  constructor(
+    content: string,
+    line: number,
+    column: number
+  ) {
+    super(content, line, column);
 
     this.type = /\bxhtml\b/i.test(content) ? 'xhtml' : 'html';
     this.variety = (/\b(frameset|strict|transitional)\b/i.exec(content.toLowerCase()) || [])[1] as any;
@@ -81,7 +109,13 @@ export class DocType extends DeclarationElement {
 }
 
 export class ProcessingElement extends DomElement {
-  constructor(content: string) { super(content); }
+  constructor(
+    content: string,
+    line: number,
+    column: number
+  ) {
+    super(content, line, column);
+  }
 
   toString(): string {
     return '<?' + this.content + '>';
@@ -89,7 +123,13 @@ export class ProcessingElement extends DomElement {
 }
 
 export class TextElement extends DomElement {
-  constructor(content: string) { super(content); }
+  constructor(
+    content: string,
+    line: number,
+    column: number
+  ) {
+    super(content, line, column);
+  }
 
   toString(): string {
     return this.content;
@@ -97,10 +137,16 @@ export class TextElement extends DomElement {
 }
 
 export class UnmatchedClosingTag extends DomElement {
-  constructor(content: string) { super(content); }
+  constructor(
+    content: string,
+    line: number,
+    column: number
+  ) {
+    super(content, line, column);
+  }
 
   toString(): string {
-    return '</' + this.content.toUpperCase() + '>';
+    return '</' + this.content + '>';
   }
 }
 
@@ -112,8 +158,14 @@ export class DomNode extends DomElement {
   tagLc: string;
   values: Record<string, string>;
 
-  constructor(public tag: string, caseSensitive = false, synthetic = false) {
-    super(null);
+  constructor(
+    public tag: string,
+    line: number,
+    column: number,
+    caseSensitive = false,
+    synthetic = false
+  ) {
+    super(null, line, column);
     this.tagLc = caseSensitive ? tag : tag.toLowerCase();
 
     if (synthetic)
@@ -164,7 +216,7 @@ export class DomNode extends DomElement {
   }
 
   partialClone(synthetic?: boolean): DomNode {
-    const clone = new DomNode(this.tag, true, synthetic || this.synthetic);
+    const clone = new DomNode(this.tag, 0, 0, true, synthetic || this.synthetic);
 
     clone.tagLc = this.tagLc;
     clone.attributes = this.attributes && this.attributes.slice(0);
@@ -177,6 +229,12 @@ export class DomNode extends DomElement {
 
   toJSON(): any {
     const json: any = { tag: this.tag };
+
+    if (this.line)
+      json.line = this.line;
+
+    if (this.column)
+      json.column = this.column;
 
     if (this.synthetic)
       json.synthetic = true;
@@ -201,7 +259,7 @@ export class DomNode extends DomElement {
 }
 
 export class DomModel {
-  private root: DomNode = new DomNode('/', false, true);
+  private root: DomNode = new DomNode('/', 0, 0, false, true);
 
   private currentFormatElem: DomNode;
   private currentFormatting: DomNode[] = [];
@@ -249,7 +307,7 @@ export class DomModel {
 
       if (this.inTable > 0 && child instanceof DomNode && /^(td|th)$/.test(child.tagLc) &&
           this.currentNode.tagLc !== 'tr') {
-        const newParent = new DomNode('tr', false, true);
+        const newParent = new DomNode('tr', 0, 0, false, true);
 
         this.addChild(newParent, '', child.tagLc === 'th');
         this.openStack.push(newParent);
@@ -257,7 +315,7 @@ export class DomModel {
       }
       else if (this.inTable > 0 && child instanceof DomNode && child.tagLc === 'tr' &&
                !/^(tbody|thead|table)$/.test(this.currentNode.tagLc)) {
-        const newParent = new DomNode(pending_th ? 'thead' : 'tbody', false, true);
+        const newParent = new DomNode(pending_th ? 'thead' : 'tbody', 0, 0, false, true);
 
         this.addChild(newParent);
         this.openStack.push(newParent);
@@ -545,7 +603,7 @@ export class DomModel {
     return [popped, parseError];
   }
 
-  pop(tagLc?: string): boolean {
+  pop(tagLc?: string, line = 0, column = 0): boolean {
     let popped = false;
     let parseError = false;
 
@@ -555,6 +613,8 @@ export class DomModel {
 
       if (tagLc === null)
         this.currentNode.closureState = ClosureState.SELF_CLOSED;
+      else if (tagLc === undefined)
+        this.currentNode.closureState = ClosureState.VOID_CLOSED;
       else
         this.currentNode.closureState = ClosureState.EXPLICITLY_CLOSED;
 
@@ -603,7 +663,7 @@ export class DomModel {
         }
       }
       else {
-        this.addChild(new UnmatchedClosingTag(tagLc));
+        this.addChild(new UnmatchedClosingTag(tagLc, line, column));
         parseError = true;
       }
     }
