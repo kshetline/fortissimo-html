@@ -42,13 +42,14 @@ async function processFile(file: string): Promise<void> {
 
   try {
     while (tries++ < 2 && !dom) {
-      const contentBuffer = fs.readFileSync(file);
-      const content = iconv.decode(contentBuffer, readEncoding, { stripBOM: true });
+      const stream = fs.createReadStream(file).pipe(iconv.decodeStream(readEncoding, { stripBOM: true }));
+      let content = '';
       const startTime = processMillis();
       const parser = new HtmlParser();
       let rebuilt = '';
+      let done: () => void;
 
-      dom = await parser
+      parser
         .onAttribute((leading, name, equals, value, quote) => {
           logProgress('attribute:', name + equals.trim() + quote + value + quote);
           rebuilt += leading + name + equals + quote + value + quote;
@@ -92,14 +93,18 @@ async function processFile(file: string): Promise<void> {
           }
 
           readEncoding = normalizedEncoding;
+          done();
+
           return true;
         })
         .onEnd((trailing, domRoot, unclosed) => {
           rebuilt += trailing;
+          dom = domRoot;
 
           const totalTime = processMillis() - startTime;
           let size = content.length / 1048576;
           const speed = (size / totalTime * 1000);
+          const contentMatches = (rebuilt === content || rebuilt === (content = content.replace(/\r\n|\n/g, '\n')));
 
           if (logStatsFlag) {
             let unit = 'MB';
@@ -110,11 +115,11 @@ async function processFile(file: string): Promise<void> {
             }
 
             console.log('*** Finished %s%s in %s msec (%s MB/sec)', size.toFixed(2), unit, totalTime.toFixed(1), speed.toFixed(2));
-            console.log('*** output matches input: ' + (rebuilt === content));
+            console.log('*** output matches input: ' + contentMatches);
             console.log('*** unclosed tags: ' + unclosed);
           }
 
-          if (rebuilt !== content && rebuilt !== content.replace(/\r\n|\n/g, '\n'))
+          if (!contentMatches)
             logErrors(rebuilt);
           else if (logRebuiltFlag)
             console.log(rebuilt);
@@ -128,6 +133,8 @@ async function processFile(file: string): Promise<void> {
               else
                 return value;
             }, 2));
+
+          done();
         })
         .onError((error, line, col, source) => {
           if (source)
@@ -155,8 +162,20 @@ async function processFile(file: string): Promise<void> {
         .onUnhandled((depth, leading, text, trailing = '') => {
           logProgress('???:', leading + text + trailing + ' (' + depth + ')');
           rebuilt += leading + text + trailing;
-        })
-        .parse(content);
+        });
+
+      await new Promise<void>(resolve => {
+        done = () => {
+          stream.end();
+          resolve();
+        };
+
+        stream.on('data', data => {
+          content += data;
+          parser.parseChunk(data);
+        });
+        stream.on('end', () => parser.parseChunk(null));
+      });
     }
   }
   catch (err) {

@@ -180,6 +180,11 @@ export class HtmlParser {
   }
 
   parseChunk(chunk: string, isFinal = false, yieldTime = DEFAULT_YIELD_TIME) {
+    if (!chunk && this.parserFinished)
+      return;
+
+    chunk = chunk || '';
+
     if (!this.parserStarted) {
       // noinspection JSIgnoredPromiseFromCall
       this.parseAux(chunk, yieldTime, isFinal);
@@ -190,16 +195,14 @@ export class HtmlParser {
     if (this.htmlSourceIsFinal)
       throw new Error('Parse will no longer accept addition input');
 
-    this.htmlSourceIsFinal = isFinal || !chunk;
+    this.nextChunkIsFinal = isFinal || !chunk;
 
     if (this.resolveNextChunk) {
-      if (!chunk)
-        this.resolveNextChunk('');
-      else {
-        this.htmlSource = (this.nextChunk || '') + chunk;
-        this.sourceIndex = 0;
-        this.resolveNextChunk(this.getChar());
-      }
+      this.htmlSource = (this.nextChunk || '') + chunk;
+      this.htmlSourceIsFinal = this.nextChunkIsFinal;
+      this.nextChunk = '';
+      this.sourceIndex = 0;
+      this.resolveNextChunk(this.getChar());
     }
     else
       this.nextChunk = (this.nextChunk || '') + chunk;
@@ -263,9 +266,7 @@ export class HtmlParser {
     let node: DomNode;
     const startTime = processMillis();
 
-    while (true) {
-      ch = this.getChar() || await this.getNextChunkChar();
-
+    while ((ch = this.getChar() || await this.getNextChunkChar())) {
       if (!ch)
         break;
       else if (isWhiteSpace(ch)) {
@@ -460,9 +461,10 @@ export class HtmlParser {
                 const bailout = this.callbackEncoding(this.charset, this.charset.toLowerCase().replace(/:\d{4}$|[^0-9a-z]/g, ''), true);
 
                 if (bailout) {
-                  this.parsingResolver(null);
-                  this.reset();
                   this.parserFinished = true;
+                  this.parsingResolver(null);
+                  setTimeout(() => this.reset());
+
                   return;
                 }
               }
@@ -751,14 +753,16 @@ export class HtmlParser {
   private async getNextChunkChar(): Promise<string> {
     if (this.htmlSourceIsFinal && (!this.htmlSource || this.sourceIndex >= this.htmlSource.length))
       return '';
-    else if (this.nextChunk) {
+    else if (this.nextChunk || this.nextChunkIsFinal) {
       this.htmlSource = this.nextChunk;
       this.htmlSourceIsFinal = this.nextChunkIsFinal;
+      this.nextChunk = '';
       this.sourceIndex = 0;
+
       return this.getChar();
     }
 
-    return new Promise<string>(resolve => {
+    return await new Promise<string>(resolve => {
       if (this.callbackRequestData)
         setTimeout(() => this.callbackRequestData());
 
@@ -777,9 +781,7 @@ export class HtmlParser {
 
     this.putBack(ch);
 
-    while (true) {
-      ch = this.getChar() || await this.getNextChunkChar();
-
+    while ((ch = this.getChar() || await this.getNextChunkChar())) {
       if (ch === '<') {
         const ch2 = this.getChar() || await this.getNextChunkChar();
 
