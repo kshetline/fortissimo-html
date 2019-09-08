@@ -343,7 +343,7 @@ export class HtmlParser {
 
           node = new DomNode(this.currentTag, this.markupLine, this.markupColumn);
           this.dom.prePush(node);
-          this.dom.addChild(node, this.collectedSpace);
+          this.dom.addChild(node, this.collectedSpace, this.textLine, this.textColumn);
           this.dom.push(node);
           this.checkingCharset = (!this.charset && this.currentTagLc === 'meta');
 
@@ -437,25 +437,28 @@ export class HtmlParser {
             this.state = State.AT_ATTRIBUTE_VALUE;
           }
           else {
-            this.doAttributeCallback();
+            this.dom.addAttribute(this.attribute, '', this.leadingSpace, '', '');
+            this.doAttributeCallback('', '', '');
             this.putBack(ch);
-            this.dom.addAttribute(this.attribute, '');
             this.state = State.AT_ATTRIBUTE_START;
           }
         break;
 
         case State.AT_ATTRIBUTE_VALUE:
           if (ch === '>') {
-            this.doAttributeCallback(this.preEqualsSpace + '=');
-            this.dom.addAttribute(this.attribute, '');
+            const equals = this.preEqualsSpace + '=';
+
+            this.dom.addAttribute(this.attribute, '', this.leadingSpace, equals, '');
+            this.doAttributeCallback(equals, '', '');
             this.putBack(ch);
           }
           else {
             const quote = (ch === '"' || ch === "'") ? ch : '';
             const value = await this.gatherAttributeValue(quote, quote ? '' : ch);
+            const equals = this.preEqualsSpace + '=' + this.collectedSpace;
 
-            this.doAttributeCallback(this.preEqualsSpace + '=' + this.collectedSpace, value, quote);
-            this.dom.addAttribute(this.attribute, value);
+            this.dom.addAttribute(this.attribute, value, this.leadingSpace, equals, quote);
+            this.doAttributeCallback(equals, value, quote);
             this.collectedSpace = '';
 
             if (this.checkingCharset) {
@@ -509,7 +512,8 @@ export class HtmlParser {
             this.dom.shouldParseCData());
 
           if (isCData) {
-            this.dom.addChild(new CData(content, this.markupLine, this.markupColumn), this.leadingSpace);
+            this.dom.addChild(new CData(content, this.markupLine, this.markupColumn),
+              this.leadingSpace, this.textLine, this.textColumn);
 
             if (!terminated)
               this.reportError('File ended in unterminated CDATA');
@@ -521,7 +525,7 @@ export class HtmlParser {
           else if (/^doctype\b/i.test(content)) {
             const docType = new DocType(content, this.markupLine, this.markupColumn);
 
-            this.dom.addChild(docType, this.leadingSpace);
+            this.dom.addChild(docType, this.leadingSpace, this.textLine, this.textColumn);
 
             if (!terminated)
               this.reportError('File ended in unterminated doctype');
@@ -536,7 +540,8 @@ export class HtmlParser {
             this.dom.setXmlMode(this.xmlMode);
           }
           else {
-            this.dom.addChild(new DeclarationElement(content, this.markupLine, this.markupColumn), this.leadingSpace);
+            this.dom.addChild(new DeclarationElement(content, this.markupLine, this.markupColumn),
+              this.leadingSpace, this.textLine, this.textColumn);
 
             if (!terminated)
               this.reportError('File ended in unterminated declaration');
@@ -555,7 +560,8 @@ export class HtmlParser {
         case State.AT_PROCESSING_START:
           [content, terminated] = await this.gatherDeclarationOrProcessing(this.collectedSpace + ch);
 
-          this.dom.addChild(new ProcessingElement(content, this.markupLine, this.markupColumn), this.leadingSpace);
+          this.dom.addChild(new ProcessingElement(content, this.markupLine, this.markupColumn),
+            this.leadingSpace, this.textLine, this.textColumn);
 
           if (!terminated)
             this.reportError('File ended in unterminated processing instruction');
@@ -578,7 +584,8 @@ export class HtmlParser {
         case State.AT_COMMENT_START:
           [content, terminated] = await this.gatherComment(this.collectedSpace + ch);
 
-          this.dom.addChild(new CommentElement(content, this.markupLine, this.markupColumn), this.leadingSpace);
+          this.dom.addChild(new CommentElement(content, this.markupLine, this.markupColumn),
+            this.leadingSpace, this.textLine, this.textColumn);
 
           if (!terminated)
             this.reportError('File ended in unterminated comment');
@@ -638,6 +645,9 @@ export class HtmlParser {
     if (this.state !== State.OUTSIDE_MARKUP)
       this.callbackError('Unexpected end of file', this.line, this.column);
 
+    if (this.collectedSpace)
+      this.dom.addChild(new TextElement(this.collectedSpace, this.textLine, this.textColumn));
+
     this.callbackEnd(this.collectedSpace, this.dom.getRoot(), this.dom.getUnclosedTagCount());
     this.parserFinished = true;
     this.parsingResolver(this.dom.getRoot());
@@ -668,7 +678,7 @@ export class HtmlParser {
     this.pendingSource = '';
   }
 
-  private doAttributeCallback(equalSign = '', value = '', quote = ''): void {
+  private doAttributeCallback(equalSign: string, value: string, quote: string): void {
     if (this.callbackAttribute)
       this.callbackAttribute(this.leadingSpace, this.attribute, equalSign, value, quote);
     else if (this.callbackUnhandled)
