@@ -58,9 +58,9 @@ async function processFile(file: string): Promise<void> {
           logProgress('CDATA:', '<![CDATA[' + cdata + ']]>' + ' (' + depth + ')');
           rebuilt += '<![CDATA[' + cdata + ']]>';
         })
-        .onEndTag((depth, tag, innerWhiteSpace: string) => {
-          logProgress('end:', '</' + tag + innerWhiteSpace + '>' + ' (' + depth + ')');
-          rebuilt += '</' + tag + innerWhiteSpace + '>';
+        .onEndTag((depth, tag, innerWhitespace: string) => {
+          logProgress('end:', '</' + tag + innerWhitespace + '>' + ' (' + depth + ')');
+          rebuilt += '</' + tag + innerWhitespace + '>';
         })
         .onComment((depth, comment) => {
           logProgress('comment:', comment + ' (' + depth + ')');
@@ -101,6 +101,8 @@ async function processFile(file: string): Promise<void> {
               else
                 return value;
             }, 2));
+
+          console.log(dom.toString());
 
           done();
         })
@@ -146,9 +148,9 @@ async function processFile(file: string): Promise<void> {
           logProgress('processing:', '<?' + processing + '>' + ' (' + depth + ')');
           rebuilt += '<?' + processing + '>';
         })
-        .onStartTagEnd((depth, innerWhiteSpace, end) => {
+        .onStartTagEnd((depth, innerWhitespace, end) => {
           logProgress('tag end:', end + ' (' + depth + ')');
-          rebuilt += innerWhiteSpace + end;
+          rebuilt += innerWhitespace + end;
         })
         .onStartTagStart((depth, tag) => {
           logProgress('tag:', tag + ' (' + depth + ')');

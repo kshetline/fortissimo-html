@@ -1,4 +1,4 @@
-export function isWhiteSpace(ch: string) {
+export function isWhitespace(ch: string) {
   return ch && ch <= ' ';
 }
 

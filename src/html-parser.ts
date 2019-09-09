@@ -1,6 +1,6 @@
 import { processMillis } from './util';
 import { VOID_ELEMENTS } from './elements';
-import { fixBadChars, isAttributeNameChar, isEol, isMarkupStart, isPCENChar, isWhiteSpace } from './characters';
+import { fixBadChars, isAttributeNameChar, isEol, isMarkupStart, isPCENChar, isWhitespace } from './characters';
 import { CData, CommentElement, DeclarationElement, DocType, DomModel, DomNode, ProcessingElement,
   TextElement } from './dom';
 
@@ -47,9 +47,9 @@ type BasicCallback = (depth: number, text: string) => void;
 type CompletionCallback = (dom?: DomNode, unclosedTagCount?: number) => void;
 type DocTypeCallback = (docType: DocType) => void;
 type EncodingCallback = (encoding: string, normalizedEncoding?: string, explicit?: boolean) => boolean;
-type EndTagCallback = (depth: number, tag: string, innerWhiteSpace: string) => void;
+type EndTagCallback = (depth: number, tag: string, innerWhitespace: string) => void;
 type ErrorCallback = (error: string, line?: number, column?: number, source?: string) => void;
-type StartTagEndCallback = (depth: number, innerWhiteSpace: string, end: string) => void;
+type StartTagEndCallback = (depth: number, innerWhitespace: string, end: string) => void;
 
 export class HtmlParser {
   private callbackAttribute: AttributeCallback;
@@ -284,7 +284,7 @@ export class HtmlParser {
         this.textColumn = this.column;
       }
 
-      while (isWhiteSpace(ch)) {
+      while (isWhitespace(ch)) {
         this.collectedSpace += ch;
         ch = this.getChar() || await this.getNextChunkChar();
       }
@@ -395,6 +395,8 @@ export class HtmlParser {
             }
           }
           else {
+            this.dom.addInnerWhitespace(this.collectedSpace);
+
             if (this.callbackStartTagEnd)
               this.callbackStartTagEnd(this.dom.getDepth(), this.collectedSpace, end);
             else if (this.callbackUnhandled)
@@ -657,11 +659,11 @@ export class HtmlParser {
     this.pendingSource = '';
   }
 
-  private doEndTagCallback(tag: string, innerWhiteSpace: string) {
+  private doEndTagCallback(tag: string, innerWhitespace: string) {
     if (this.callbackEndTag)
-      this.callbackEndTag(this.dom.getDepth() + 1, tag, innerWhiteSpace);
+      this.callbackEndTag(this.dom.getDepth() + 1, tag, innerWhitespace);
     else if (this.callbackUnhandled)
-      this.callbackUnhandled(this.dom.getDepth() + 1, '</' + tag + innerWhiteSpace + '>');
+      this.callbackUnhandled(this.dom.getDepth() + 1, '</' + tag + innerWhitespace + '>');
 
     this.state = State.OUTSIDE_MARKUP;
     this.collectedSpace = '';
@@ -863,7 +865,7 @@ export class HtmlParser {
     let ch: string;
     let afterSlash = false;
 
-    while ((ch = this.getChar() || await this.getNextChunkChar()) && ch !== quote && (quote || (!isWhiteSpace(ch) && ch !== '>'))) {
+    while ((ch = this.getChar() || await this.getNextChunkChar()) && ch !== quote && (quote || (!isWhitespace(ch) && ch !== '>'))) {
       value += ch;
       afterSlash = ch === '/';
     }
@@ -936,7 +938,7 @@ export class HtmlParser {
 
       if (endStage >= len && ch === '>')
         return [content.substr(0, content.length - endStage - 1), content.substr(content.length - endStage - 1), true];
-      else if (endStage >= len && isWhiteSpace(ch))
+      else if (endStage >= len && isWhitespace(ch))
         ++endStage;
       else if (endStage < len && ch.toLowerCase() === ender.charAt(endStage)) {
         if (endStage === 0) {

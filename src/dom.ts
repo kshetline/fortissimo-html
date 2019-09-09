@@ -151,15 +151,19 @@ export class UnmatchedClosingTag extends DomElement {
 }
 
 export class DomNode extends DomElement {
-  attributes: string[];
+  attributes: string[] = [];
   children: DomElement[];
   closureState = ClosureState.UNCLOSED;
-  equals: string[];
-  quotes: string[];
-  spacing: string[];
+  endTagLine = 0;
+  endTagColumn = 0;
+  endTagText = '';
+  equals: string[] = [];
+  innerWhitespace = '';
+  quotes: string[] = [];
+  spacing: string[] = [];
   synthetic?: boolean;
   tagLc: string;
-  values: string[];
+  values: string[] = [];
 
   constructor(
     public tag: string,
@@ -176,15 +180,10 @@ export class DomNode extends DomElement {
   }
 
   addAttribute(name: string, value: string, leadingSpace = '', equals = '=', quote = '"'): void {
-    this.attributes = this.attributes || [];
     this.attributes.push(name);
-    this.values = this.values || [];
     this.values.push(value);
-    this.spacing = this.spacing || [];
     this.spacing.push(leadingSpace);
-    this.equals = this.equals || [];
     this.equals.push(equals);
-    this.quotes = this.quotes || [];
     this.quotes.push(quote);
   }
 
@@ -209,6 +208,12 @@ export class DomNode extends DomElement {
     return false;
   }
 
+  setEndTag(text: string, line = 0, column = 0) {
+    this.endTagText = text;
+    this.endTagLine = line;
+    this.endTagColumn = column;
+  }
+
   detach(): DomNode {
     if (this.parent)
       this.parent.removeChild(this);
@@ -220,10 +225,11 @@ export class DomNode extends DomElement {
     const clone = new DomNode(this.tag, 0, 0, true, synthetic || this.synthetic);
 
     clone.tagLc = this.tagLc;
-    clone.attributes = this.attributes && this.attributes.slice(0);
-
-    if (this.values)
-      clone.values = Object.assign({}, this.values);
+    clone.attributes = this.attributes.slice(0);
+    clone.spacing = this.spacing.slice(0);
+    clone.equals = this.equals.slice(0);
+    clone.quotes = this.quotes.slice(0);
+    clone.values = this.values.slice(0);
 
     return clone;
   }
@@ -246,7 +252,7 @@ export class DomNode extends DomElement {
     json.depth = this.depth;
     json.closureState = this.closureState;
 
-    if (this.attributes && this.values)
+    if (this.attributes.length > 0)
       json.values = this.attributes.reduce((values: any, attrib, index) =>
         { values[attrib] = this.values[index]; return values; }, {});
 
@@ -256,7 +262,40 @@ export class DomNode extends DomElement {
     if (this.children)
       json.children = this.children;
 
+    if (this.closureState === ClosureState.EXPLICITLY_CLOSED && this.endTagText)
+      json.endTagText = `${this.endTagText} (${this.endTagLine}, ${this.endTagColumn})`;
+
     return json;
+  }
+
+  toString(): string {
+    const parts: string[] = [];
+
+    if (!this.synthetic) {
+      parts.push('<', this.tag);
+
+      if (this.attributes) {
+        this.attributes.forEach((attrib, index) => {
+          parts.push(this.spacing[index], attrib, this.equals[index], this.quotes[index], this.values[index], this.quotes[index]);
+        });
+      }
+
+      if (this.innerWhitespace)
+        parts.push(this.innerWhitespace);
+
+      if (this.closureState === ClosureState.SELF_CLOSED)
+        parts.push('/>');
+      else
+        parts.push('>');
+    }
+
+    if (this.children)
+      this.children.forEach(child => parts.push(child.toString()));
+
+    if (!this.synthetic && this.closureState === ClosureState.EXPLICITLY_CLOSED && this.endTagText)
+      parts.push(this.endTagText);
+
+    return parts.join('');
   }
 }
 
@@ -277,6 +316,11 @@ export class DomModel {
 
   addAttribute(name: string, value: string, leadingSpace = '', equals = '=', quote = '"'): void {
     this.currentNode.addAttribute(name, value, leadingSpace, equals, quote);
+  }
+
+  addInnerWhitespace(whitespace: string): void {
+    if (this.currentNode)
+      this.currentNode.innerWhitespace = whitespace || '';
   }
 
   canDoXmlMode(): boolean {
@@ -302,7 +346,6 @@ export class DomModel {
       }
     }
   }
-
 
   addChild(child: DomElement, pending_th = false): void {
     if (!this.xmlMode) {
@@ -618,8 +661,10 @@ export class DomModel {
         this.currentNode.closureState = ClosureState.SELF_CLOSED;
       else if (tagLc === undefined)
         this.currentNode.closureState = ClosureState.VOID_CLOSED;
-      else
+      else {
         this.currentNode.closureState = ClosureState.EXPLICITLY_CLOSED;
+        this.currentNode.setEndTag(endTagText, line, column);
+      }
 
       if (this.currentFormatElem && this.currentFormatElem.tagLc === tagLc) {
         this.currentFormatting.pop();
@@ -639,6 +684,7 @@ export class DomModel {
 
             if (node.tagLc === tagLc) {
               node.closureState = ClosureState.EXPLICITLY_CLOSED;
+              node.setEndTag(endTagText, line, column);
               this.currentFormatting.splice(i, 1);
               break;
             }
@@ -658,8 +704,14 @@ export class DomModel {
         }
 
         while (this.openStack.length > nodeIndex) {
-          if (!this.currentNode.closureState)
-            this.currentNode.closureState = ClosureState.IMPLICITLY_CLOSED;
+          if (!this.currentNode.closureState) {
+            if (this.openStack.length - 1 === nodeIndex) {
+              this.currentNode.closureState = ClosureState.EXPLICITLY_CLOSED;
+              this.currentNode.setEndTag(endTagText, line, column);
+            }
+            else
+              this.currentNode.closureState = ClosureState.IMPLICITLY_CLOSED;
+          }
 
           this.openStack.pop();
           this.updateCurrentNode();
