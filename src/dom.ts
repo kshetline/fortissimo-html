@@ -144,7 +144,7 @@ export class UnmatchedClosingTag extends DomElement {
   }
 
   toString(): string {
-    return '</' + this.content + '>';
+    return this.content;
   }
 }
 
@@ -390,7 +390,7 @@ export class DomModel {
     }
 
     if (!popped) {
-      this.addChild(new UnmatchedClosingTag(tagLc, line, column));
+      this.addChild(new UnmatchedClosingTag(endTagText, line, column));
       parseError = true;
     }
 
