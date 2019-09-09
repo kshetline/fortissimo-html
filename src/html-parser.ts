@@ -375,15 +375,15 @@ export class HtmlParser {
           if (ch === '/') {
             end = '/>';
             ch = this.getChar() || await this.getNextChunkChar();
+
+            if (ch !== '>') {
+              this.putBack(ch);
+              ch = '/';
+            }
           }
 
           if (ch !== '>') {
-            if (end.length > 1) {
-              this.reportError(`Syntax error in <${this.currentTag}>`);
-              break;
-            }
-
-            if (isAttributeNameChar(ch)) {
+            if (isAttributeNameChar(ch) || ch === '/') {
               this.leadingSpace = this.collectedSpace;
               this.collectedSpace = '';
               await this.gatherAttributeName(ch);
@@ -622,6 +622,7 @@ export class HtmlParser {
 
             this.pop(tag, `</${$$[1]}${$$[2]}>`);
             this.doEndTagCallback($$[1], $$[2]);
+            this.state = State.OUTSIDE_MARKUP;
           }
         break;
       }

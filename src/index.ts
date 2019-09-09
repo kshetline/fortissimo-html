@@ -11,6 +11,7 @@ const keepAlive = setInterval(() => {}, 100);
 const logDomTreeFlag = false;
 const logErrorsFlag = true;
 const logFilesFlag = true;
+const logFromDomFlag = false;
 const logProgressFlag = false;
 const logRebuiltFlag = false;
 const logStatsFlag = true;
@@ -68,11 +69,14 @@ async function processFile(file: string): Promise<void> {
         })
         .onCompletion((domRoot, unclosed) => {
           dom = domRoot;
+          content = content.replace(/\r\n|\n/g, '\n');
 
           const totalTime = processMillis() - startTime;
           let size = content.length / 1048576;
           const speed = (size / totalTime * 1000);
-          const contentMatches = (rebuilt === content || rebuilt === (content = content.replace(/\r\n|\n/g, '\n')));
+          const rebuiltMatches = (rebuilt === content);
+          const fromDom = dom ? dom.toString() : '';
+          const fromDomMatches = (fromDom === content);
 
           if (logStatsFlag) {
             let unit = 'MB';
@@ -83,14 +87,24 @@ async function processFile(file: string): Promise<void> {
             }
 
             console.log('*** Finished %s%s in %s msec (%s MB/sec)', size.toFixed(2), unit, totalTime.toFixed(1), speed.toFixed(2));
-            console.log('*** output matches input: ' + contentMatches);
             console.log('*** unclosed tags: ' + unclosed);
           }
 
-          if (!contentMatches)
-            logErrors(rebuilt);
+          if (logStatsFlag || (logErrorsFlag && !rebuiltMatches))
+            (rebuiltMatches ? console.log : console.error)('*** original matches rebuilt: ' + rebuiltMatches);
+
+          if (logStatsFlag || (logErrorsFlag && !fromDomMatches))
+            (fromDomMatches ? console.log : console.error)('*** original matches from-dom: ' + fromDomMatches);
+
+          if (!rebuiltMatches)
+            logErrors('--- rebuilt ---\n' + rebuilt + '\n------');
           else if (logRebuiltFlag)
-            console.log(rebuilt);
+            console.log('--- rebuilt ---\n' + rebuilt + '\n------');
+
+          if (!fromDomMatches)
+            logErrors('--- from dom ---\n' + fromDom + '\n------');
+          else if (logFromDomFlag)
+            console.log('--- from dom ---\n' + fromDom + '\n------');
 
           if (logDomTreeFlag)
             console.log(JSON.stringify(domRoot, (name, value) => {
@@ -101,8 +115,6 @@ async function processFile(file: string): Promise<void> {
               else
                 return value;
             }, 2));
-
-          console.log(dom.toString());
 
           done();
         })
