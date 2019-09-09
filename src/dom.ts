@@ -1,5 +1,4 @@
-import { FORMATTING_ELEMENTS, FOSTER_PARENT_SPECIAL_TARGETS, MARKER_ELEMENTS, OPEN_IMPLIES_CLOSE,
-  SCOPE_ELEMENTS, SPECIAL_ELEMENTS } from './elements';
+import { FORMATTING_ELEMENTS, MARKER_ELEMENTS, OPEN_IMPLIES_CLOSE } from './elements';
 
 function last<T>(array: T[]): T {
   if (array && array.length > 0)
@@ -13,8 +12,7 @@ export enum ClosureState {
   SELF_CLOSED,
   VOID_CLOSED,
   EXPLICITLY_CLOSED,
-  IMPLICITLY_CLOSED,
-  PROGRAMMATICALLY_CLOSED
+  IMPLICITLY_CLOSED
 }
 
 export abstract class DomElement {
@@ -193,45 +191,10 @@ export class DomNode extends DomElement {
     this.children.push(child);
   }
 
-  removeChild(child: DomElement): boolean {
-    if (this.children) {
-      const index = this.children.indexOf(child);
-
-      if (index >= 0) {
-        this.children.splice(index, 1);
-        child.parent = undefined;
-
-        return true;
-      }
-    }
-
-    return false;
-  }
-
   setEndTag(text: string, line = 0, column = 0) {
     this.endTagText = text;
     this.endTagLine = line;
     this.endTagColumn = column;
-  }
-
-  detach(): DomNode {
-    if (this.parent)
-      this.parent.removeChild(this);
-
-    return this;
-  }
-
-  partialClone(synthetic?: boolean): DomNode {
-    const clone = new DomNode(this.tag, 0, 0, true, synthetic || this.synthetic);
-
-    clone.tagLc = this.tagLc;
-    clone.attributes = this.attributes.slice(0);
-    clone.spacing = this.spacing.slice(0);
-    clone.equals = this.equals.slice(0);
-    clone.quotes = this.quotes.slice(0);
-    clone.values = this.values.slice(0);
-
-    return clone;
   }
 
   toJSON(): any {
@@ -302,8 +265,6 @@ export class DomNode extends DomElement {
 export class DomModel {
   private root: DomNode = new DomNode('/', 0, 0, false, true);
 
-  private currentFormatElem: DomNode;
-  private currentFormatting: DomNode[] = [];
   private currentNode = this.root;
   private inMathOrSvg = 0;
   private inTable = 0;
@@ -349,8 +310,6 @@ export class DomModel {
 
   addChild(child: DomElement, pending_th = false): void {
     if (!this.xmlMode) {
-      this.reconstructFormattingIfNeeded();
-
       if (this.inTable > 0 && child instanceof DomNode && /^(td|th)$/.test(child.tagLc) &&
           this.currentNode.tagLc !== 'tr') {
         const newParent = new DomNode('tr', 0, 0, false, true);
@@ -372,52 +331,7 @@ export class DomModel {
     this.currentNode.addChild(child);
   }
 
-  private reconstructFormattingIfNeeded(): void {
-    // Adapted from https://html.spec.whatwg.org/multipage/parsing.html#reconstruct-the-active-formatting-elements.
-
-    // Step 1.
-    if (this.currentFormatting.length === 0)
-      return;
-
-    // Steps 2-4, rearranged from the original "goto" logic.
-    let entryIndex = this.currentFormatting.length - 1;
-    let entry = this.currentFormatting[entryIndex];
-    let skipAdvance = false;
-
-    if (MARKER_ELEMENTS.has(entry.tagLc) || this.openStack.indexOf(entry) >= 0)
-      return;
-
-    // "Rewind"
-    do {
-      if (entryIndex === 0) {
-        skipAdvance = true;
-        break;
-      }
-
-      // Step 5
-      entry = this.currentFormatting[--entryIndex];
-    } while (!MARKER_ELEMENTS.has(entry.tagLc) && this.openStack.indexOf(entry) < 0); // <- Step 6
-
-    // Step 7, "Advance"
-    do {
-      if (skipAdvance)
-        skipAdvance = false;
-      else
-        entry = this.currentFormatting[++entryIndex];
-
-      // Step 8, "Create"
-      entry = entry.partialClone(true);
-      // Step 9
-      last(this.openStack).addChild(entry);
-      this.openStack.push(entry);
-      this.currentNode = entry;
-      this.currentFormatting[entryIndex] = entry;
-    } while (entryIndex < this.currentFormatting.length - 1); // <- Step 10
-  }
-
   push(node: DomNode): void {
-    this.reconstructFormattingIfNeeded();
-
     this.openStack.push(node);
     this.currentNode = node;
 
@@ -425,228 +339,6 @@ export class DomModel {
       ++this.inTable;
     else if (node.tagLc === 'math' || node.tagLc === 'svg')
       ++this.inMathOrSvg;
-
-    if (FORMATTING_ELEMENTS.has(node.tagLc) || MARKER_ELEMENTS.has(node.tagLc)) {
-      this.currentFormatting.push(node);
-      this.currentFormatElem = node;
-    }
-  }
-
-  private getFormattingElement(tagLc: string): DomNode {
-    let formattingElem: DomNode;
-
-    for (let i = this.currentFormatting.length - 1; i >= 0; --i) {
-      const elem = this.currentFormatting[i];
-
-      if (elem.tagLc === tagLc) {
-        formattingElem = elem;
-        break;
-      }
-      else if (MARKER_ELEMENTS.has(elem.tagLc))
-        break;
-    }
-
-    if (!formattingElem && this.currentFormatting.length > 0 && this.currentFormatting[0].tagLc === tagLc)
-      return this.currentFormatting[0];
-    else
-      return formattingElem;
-  }
-
-  private isInScope(tagLc: string, scopeLimits: Set<string>): boolean {
-    for (let i = this.openStack.length - 1; i >= 0; --i) {
-      const elem = this.openStack[i];
-
-      if (elem.tagLc === tagLc)
-        return true;
-      else if (scopeLimits.has(elem.tagLc))
-        return false;
-    }
-
-    return false;
-  }
-
-  private getFurthestBlock(tagLc: string): DomNode {
-    let start: number;
-
-    for (start = this.openStack.length - 1; start >= 0 && this.openStack[start].tagLc !== tagLc; --start) {}
-
-    if (start < 0)
-      return undefined;
-
-    for (let i = start + 1; i < this.openStack.length; ++i) {
-      const elem = this.openStack[i];
-
-      if (SPECIAL_ELEMENTS.has(elem.tagLc))
-        return elem;
-    }
-
-    return undefined;
-  }
-
-  private getFosterParent(): [DomNode, number] {
-    // This is a simplified version of https://html.spec.whatwg.org/multipage/parsing.html#foster-parent,
-    // with handling for <template> elements removed.
-    let fosterParent: DomNode;
-    let insertionIndex = -1;
-
-    for (let i = this.openStack.length - 1; i > 0; --i) {
-      if (this.openStack[i].tagLc === 'table') {
-        fosterParent = this.openStack[i - 1];
-        insertionIndex = fosterParent.children.indexOf(this.openStack[i]);
-        break;
-      }
-    }
-
-    if (!fosterParent)
-      fosterParent = this.openStack.find(node => node.tagLc === 'html') || this.root;
-
-    return [fosterParent, insertionIndex];
-  }
-
-  private invokeAdoptionAgency(tagLc: string): [boolean, boolean] {
-    // The following is adapted from https://html.spec.whatwg.org/multipage/parsing.html#adoptionAgency.
-    let formatElem: DomNode;
-    let popped = false;
-    let parseError = false;
-
-    // Steps 1 and 2 taken care of before this method is called.
-    // Steps 3-5, "Outer loop"
-    for (let i = 0; i < 8; ++i) {
-      // Step 6
-      formatElem = this.getFormattingElement(tagLc);
-
-      if (!formatElem)
-        break;
-      // Step 7
-      else if (this.openStack.indexOf(formatElem) < 0) {
-        this.currentFormatting.splice(this.currentFormatting.indexOf(formatElem), 1);
-        this.currentFormatElem = last(this.currentFormatting);
-        parseError = true;
-        break;
-      }
-      // Step 8
-      else if (!this.isInScope(tagLc, SCOPE_ELEMENTS)) {
-        parseError = true;
-        break;
-      }
-      // Step 9
-      else if (formatElem !== this.currentNode)
-        parseError = true;
-
-      // Step 10
-      const furthestBlock = this.getFurthestBlock(tagLc);
-
-      // Step 11
-      if (!furthestBlock)
-        break; // By leaving this loop, the details described for step 11 will be taken care of later.
-
-      popped = true;
-
-      // Step 12
-      const commonAncestor = formatElem.parent;
-      // Step 13
-      let bookmark = this.currentFormatting.indexOf(formatElem);
-      // Step 14
-      let node = furthestBlock;
-      let lastNode = furthestBlock;
-      let newElem: DomNode;
-
-      // Steps 14.1-14.2, "Inner Loop"
-      for (let j = 1; ; ++j) {
-        // Step 14.3
-        node = node.parent;
-
-        // Step 14.4
-        if (node === formatElem)
-          break;
-
-        // Step 14.5
-        const nodeIndex = this.currentFormatting.indexOf(node);
-
-        if (j > 3 && nodeIndex >= 0)
-          this.currentFormatting.splice(nodeIndex, 1);
-        // Step 14.6
-        else if (nodeIndex < 0) {
-          const stackIndex = this.openStack.indexOf(node);
-
-          node.closureState = ClosureState.PROGRAMMATICALLY_CLOSED;
-          this.openStack.splice(stackIndex, 1);
-
-          if (stackIndex < this.openStack.length)
-            this.openStack[stackIndex].parent = this.openStack[stackIndex - 1];
-
-          continue;
-        }
-
-        // Step 14.7
-        newElem = formatElem.partialClone(true);
-        newElem.closureState = ClosureState.PROGRAMMATICALLY_CLOSED;
-
-        this.currentFormatting[nodeIndex] = newElem;
-        this.openStack[this.openStack.indexOf(node)] = newElem;
-        node = newElem;
-
-        // Step 14.8
-        if (lastNode === furthestBlock)
-          bookmark = nodeIndex;
-
-        // Steps 14.9-14.11
-        node.addChild(lastNode.detach());
-        lastNode = node;
-      }
-
-      // Step 15
-      if (FOSTER_PARENT_SPECIAL_TARGETS.has(commonAncestor.tagLc)) {
-        const [fosterParent, insertionIndex] = this.getFosterParent();
-
-        if (insertionIndex < 0)
-          fosterParent.addChild(lastNode);
-        else {
-          fosterParent.children.splice(insertionIndex, 0, lastNode);
-          lastNode.parent = fosterParent;
-        }
-
-        lastNode.parent = fosterParent;
-      }
-      else
-        commonAncestor.addChild(lastNode.detach());
-
-      // Step 16
-      newElem = formatElem.partialClone(true);
-      formatElem.closureState = ClosureState.PROGRAMMATICALLY_CLOSED;
-      // Step 17
-      newElem.children = furthestBlock.children;
-      newElem.children.forEach(child => child.parent = newElem);
-      // Step 18
-      furthestBlock.children = [newElem];
-      newElem.parent = furthestBlock;
-      newElem.closureState = ClosureState.PROGRAMMATICALLY_CLOSED;
-
-      // Step 19
-      let formatElemIndex = this.currentFormatting.indexOf(formatElem);
-
-      if (bookmark === formatElemIndex)
-        this.currentFormatting[bookmark] = newElem;
-      else {
-        if (bookmark < formatElemIndex)
-          ++formatElemIndex;
-
-        this.currentFormatting.splice(bookmark, 0, newElem);
-        this.currentFormatting.splice(formatElemIndex, 1);
-      }
-
-      // Step 20, part 1
-      formatElemIndex = this.openStack.indexOf(formatElem);
-      this.openStack.splice(formatElemIndex, 1);
-
-      // Implementing Step 20, part 2 ("...and insert the new element into the stack of open elements
-      // immediately below the position of *furthest block* in that stack.") causes problems in this
-      // implementation (and doesn't make a lot of sense), so it's been left out.
-
-      // Step 21 (loop back)
-    }
-
-    return [popped, parseError];
   }
 
   pop(tagLc: string, endTagText = '</' + tagLc + '>', line = 0, column = 0): boolean {
@@ -665,39 +357,16 @@ export class DomModel {
         this.currentNode.closureState = ClosureState.EXPLICITLY_CLOSED;
         this.currentNode.setEndTag(endTagText, line, column);
       }
-
-      if (this.currentFormatElem && this.currentFormatElem.tagLc === tagLc) {
-        this.currentFormatting.pop();
-        this.currentFormatElem = last(this.currentFormatting);
-      }
     }
-    else if (!this.xmlMode && FORMATTING_ELEMENTS.has(tagLc))
-      [popped, parseError] = this.invokeAdoptionAgency(tagLc);
 
-    if (!popped) {
-      const nodeIndex = this.openStack.map(node => node.tagLc).lastIndexOf(tagLc);
+    if (!popped && !this.xmlMode) {
+      let nodeIndex = this.openStack.map(node => node.tagLc).lastIndexOf(tagLc);
 
-      if (!this.xmlMode && nodeIndex > 0) { // No, I really don't want >= 0.
+      if (nodeIndex > 0) { // No, I really don't want >= 0.
         if (FORMATTING_ELEMENTS.has(tagLc)) {
-          for (let i = this.currentFormatting.length - 1; i >= 0; --i) {
-            const node = this.currentFormatting[i];
-
-            if (node.tagLc === tagLc) {
-              node.closureState = ClosureState.EXPLICITLY_CLOSED;
-              node.setEndTag(endTagText, line, column);
-              this.currentFormatting.splice(i, 1);
-              break;
-            }
-            else if (MARKER_ELEMENTS.has(node.tagLc))
-              break;
-          }
-        }
-        else if (MARKER_ELEMENTS.has(tagLc)) {
-          for (let i = this.currentFormatting.length - 1; i >= 0; --i) {
-            const node = this.currentFormatting[i];
-
-            if (node.tagLc === tagLc) {
-              this.currentFormatting.splice(i, this.currentFormatting.length - i);
+          for (let i = nodeIndex + 1; i < this.openStack.length; ++i) {
+            if (MARKER_ELEMENTS.has(this.openStack[i].tagLc)) {
+              nodeIndex = -1;
               break;
             }
           }
@@ -706,6 +375,7 @@ export class DomModel {
         while (this.openStack.length > nodeIndex) {
           if (!this.currentNode.closureState) {
             if (this.openStack.length - 1 === nodeIndex) {
+              popped = true;
               this.currentNode.closureState = ClosureState.EXPLICITLY_CLOSED;
               this.currentNode.setEndTag(endTagText, line, column);
             }
@@ -717,10 +387,11 @@ export class DomModel {
           this.updateCurrentNode();
         }
       }
-      else {
-        this.addChild(new UnmatchedClosingTag(tagLc, line, column));
-        parseError = true;
-      }
+    }
+
+    if (!popped) {
+      this.addChild(new UnmatchedClosingTag(tagLc, line, column));
+      parseError = true;
     }
 
     if (this.openStack.length === 0)

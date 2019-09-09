@@ -6,24 +6,6 @@ export const MARKER_ELEMENTS = new Set(['applet', 'object', 'marquee', 'template
 export const VOID_ELEMENTS = new Set(['area', 'base', 'br',  'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param',
                                       'source', 'track', 'wbr', 'command', 'keygen', 'menuitem']);
 
-export const SCOPE_ELEMENTS = new Set(['applet', 'caption', 'html', 'table', 'td', 'th', 'marquee', 'object',
-                                       'template', 'mi', 'mo', 'mn', 'ms', 'mtext', 'annotation-xml', 'foreignobject',
-                                       'desc', 'title']);
-
-export const SPECIAL_ELEMENTS = new Set(['address', 'applet', 'area', 'article', 'aside', 'base', 'basefont', 'bgsound',
-                                         'blockquote', 'body', 'br', 'button', 'caption', 'center', 'col', 'colgroup',
-                                         'dd', 'details', 'dir', 'div', 'dl', 'dt', 'embed', 'fieldset', 'figcaption',
-                                         'figure', 'footer', 'form', 'frame', 'frameset', 'h1', 'h2', 'h3', 'h4', 'h5',
-                                         'h6', 'head', 'header', 'hgroup', 'hr', 'html', 'iframe', 'img', 'input',
-                                         'keygen', 'li', 'link', 'listing', 'main', 'marquee', 'menu', 'meta', 'nav',
-                                         'noembed', 'noframes', 'noscript', 'object', 'ol', 'p', 'param', 'plaintext',
-                                         'pre', 'script', 'section', 'select', 'source', 'style', 'summary', 'table',
-                                         'tbody', 'td', 'template', 'textarea', 'tfoot', 'th', 'thead', 'title', 'tr',
-                                         'track', 'ul', 'wbr', 'xmp', 'mi', 'mo', 'mn', 'ms', 'mtext',
-                                         'annotation-xml', 'foreignobject', 'desc', 'title']);
-
-export const FOSTER_PARENT_SPECIAL_TARGETS = new Set(['table', 'tbody', 'tfoot', 'thead', 'tr']);
-
 // FORM_TAGS, P_TAG, and OPEN_IMPLIES_CLOSE were taken from:
 // https://github.com/fb55/htmlparser2/blob/master/src/Parser.ts (then modified slightly)
 
