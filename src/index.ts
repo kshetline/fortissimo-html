@@ -43,36 +43,38 @@ async function processFile(file: string): Promise<void> {
 
   try {
     while (tries++ < 2 && !dom) {
-      const stream = fs.createReadStream(file).pipe(iconv.decodeStream(readEncoding, { stripBOM: true }));
+      const rawStream = fs.createReadStream(file);
+      const stream = rawStream.pipe(iconv.decodeStream(readEncoding, { stripBOM: true }));
       let content = '';
       const startTime = processMillis();
       const parser = new HtmlParser();
       let rebuilt = '';
       let done: () => void;
+      let bytes = 0;
 
       parser
-        .onAttribute((leading, name, equals, value, quote) => {
+        .on('attribute', (leading, name, equals, value, quote) => {
           logProgress('attribute:', name + equals.trim() + quote + value + quote);
           rebuilt += leading + name + equals + quote + value + quote;
         })
-        .onCData((depth, cdata) => {
+        .on('cdata', (depth, cdata) => {
           logProgress('CDATA:', '<![CDATA[' + cdata + ']]>' + ' (' + depth + ')');
           rebuilt += '<![CDATA[' + cdata + ']]>';
         })
-        .onEndTag((depth, tag, innerWhitespace: string) => {
+        .on('end-tag', (depth, tag, innerWhitespace: string) => {
           logProgress('end:', '</' + tag + innerWhitespace + '>' + ' (' + depth + ')');
           rebuilt += '</' + tag + innerWhitespace + '>';
         })
-        .onComment((depth, comment) => {
+        .on('comment', (depth, comment) => {
           logProgress('comment:', comment + ' (' + depth + ')');
           rebuilt += '<!--' + comment + '-->';
         })
-        .onCompletion((domRoot, unclosed) => {
+        .on('completion', (domRoot, unclosed) => {
           dom = domRoot;
           content = content.replace(/\r\n|\n/g, '\n');
 
           const totalTime = processMillis() - startTime;
-          let size = content.length / 1048576;
+          let size = bytes / 1048576;
           const speed = (size / totalTime * 1000);
           const rebuiltMatches = (rebuilt === content);
           const fromDom = dom ? dom.toString() : '';
@@ -118,18 +120,18 @@ async function processFile(file: string): Promise<void> {
 
           done();
         })
-        .onDeclaration((depth, declaration) => {
+        .on('declaration', (depth, declaration) => {
           logProgress('declaration:', '<!' + declaration + '>' + ' (' + depth + ')');
           rebuilt += '<!' + declaration + '>';
         })
-        .onDocType(docType => {
+        .on('doctype', docType => {
           if (logStatsFlag)
             console.log('DOCTYPE: %s%s%s', docType.type.toUpperCase(), docType.variety ? ' ' + docType.variety : '',
               docType.version ? ' ' + docType.version : '');
 
           rebuilt += '<!' + docType.content + '>';
         })
-        .onEncoding((encoding, normalizedEncoding) => {
+        .on('encoding', (encoding, normalizedEncoding) => {
           if (logStatsFlag)
             console.log('*** Encoding: %s', encoding);
 
@@ -149,30 +151,30 @@ async function processFile(file: string): Promise<void> {
 
           return true;
         })
-        .onError((error, line, col, source) => {
+        .on('error', (error, line, col, source) => {
           if (source)
             logErrors('*** %s ***', source);
 
           logErrors('*** %s: [%s, %s]', error, line, col);
           rebuilt += source || '';
         })
-        .onProcessing((depth, processing) => {
+        .on('processing', (depth, processing) => {
           logProgress('processing:', '<?' + processing + '>' + ' (' + depth + ')');
           rebuilt += '<?' + processing + '>';
         })
-        .onStartTagEnd((depth, innerWhitespace, end) => {
+        .on('start-tag-end', (depth, innerWhitespace, end) => {
           logProgress('tag end:', end + ' (' + depth + ')');
           rebuilt += innerWhitespace + end;
         })
-        .onStartTagStart((depth, tag) => {
+        .on('start-tag-start', (depth, tag) => {
           logProgress('tag:', tag + ' (' + depth + ')');
           rebuilt += '<' + tag;
         })
-        .onText((depth, text) => {
+        .on('text', (depth, text) => {
           logProgress('text:', text + ' (' + depth + ')');
           rebuilt += text;
         })
-        .onUnhandled((depth, text) => {
+        .on('generic', (depth, text) => {
           logProgress('???:', text + '(' + depth + ')');
           rebuilt += text;
         });
@@ -182,6 +184,8 @@ async function processFile(file: string): Promise<void> {
           stream.end();
           resolve();
         };
+
+        rawStream.on('data', data => bytes += data.length);
 
         stream.on('data', data => {
           content += data;
