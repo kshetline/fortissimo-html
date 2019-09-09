@@ -9,6 +9,17 @@ export interface HtmlParserOptions {
   fixBadChars?: boolean;
 }
 
+export class ParseResults {
+  domRoot: DomNode;
+  characters = 0;
+  errors = 0;
+  implicitlyClosedTags = 0;
+  lines = 0;
+  stopped = false;
+  totalTime = processMillis();
+  unclosedTags = 0;
+}
+
 enum State {
   OUTSIDE_MARKUP,
   AT_MARKUP_START,
@@ -44,7 +55,7 @@ const tagForState = {
 
 type AttributeCallback = (leadingSpace: string, name: string, equalSign: string, value: string, quote: string) => void;
 type BasicCallback = (depth: number, text: string) => void;
-type CompletionCallback = (dom?: DomNode, unclosedTagCount?: number) => void;
+type CompletionCallback = (results?: ParseResults) => void;
 type DocTypeCallback = (docType: DocType) => void;
 type EncodingCallback = (encoding: string, normalizedEncoding?: string, explicit?: boolean) => boolean;
 type EndTagCallback = (depth: number, tag: string, innerWhitespace: string) => void;
@@ -81,7 +92,8 @@ export class HtmlParser {
   private nextChunk = '';
   private nextChunkIsFinal: boolean;
   readonly options: HtmlParserOptions;
-  private parsingResolver: (node: DomNode) => void;
+  private parsingResolver: (results: ParseResults) => void;
+  private parseResults: ParseResults;
   private parserRunning = false;
   private pendingCharset = '';
   private pendingSource = '';
@@ -90,6 +102,7 @@ export class HtmlParser {
   private resolveNextChunk: (gotMoreChars: string) => void;
   private sourceIndex = 0;
   private state = State.OUTSIDE_MARKUP;
+  private stopped = false;
   private textColumn: number;
   private textLine: number;
   private yieldTime = DEFAULT_YIELD_TIME;
@@ -128,7 +141,7 @@ export class HtmlParser {
   }
 
   callback(event: EventType, ...args: any): boolean | void {
-    if (!this.parserRunning)
+    if (!this.parserRunning && event !== 'completion')
       return false;
 
     let cb = this.callbacks.get(event) as (...args: any) => boolean | void;
@@ -154,6 +167,21 @@ export class HtmlParser {
     }
   }
 
+  stop(): void {
+    this.htmlSource = '';
+    this.htmlSourceIsFinal = false;
+    this.nextChunk = '';
+    this.nextChunkIsFinal = false;
+    this.parserRunning = false;
+    this.putBacks = [];
+    this.stopped = true;
+
+    if (this.resolveNextChunk) {
+      this.resolveNextChunk('');
+      this.resolveNextChunk = undefined;
+    }
+  }
+
   reset(): void {
     this.charset = '';
     this.checkingCharset = false;
@@ -167,11 +195,13 @@ export class HtmlParser {
     this.line  = 1;
     this.nextChunk = '';
     this.nextChunkIsFinal = false;
+    this.parseResults = undefined;
     this.parserRunning = false;
     this.pendingCharset = '';
     this.pendingSource = '';
     this.putBacks = [];
     this.sourceIndex = 0;
+    this.stopped = false;
     this.state = State.OUTSIDE_MARKUP;
     this.xmlMode = false;
 
@@ -181,7 +211,7 @@ export class HtmlParser {
     }
   }
 
-  async parse(source = '', yieldTime = DEFAULT_YIELD_TIME): Promise<DomNode> {
+  async parse(source = '', yieldTime = DEFAULT_YIELD_TIME): Promise<ParseResults> {
     return this.parseAux(source, yieldTime, !!source);
   }
 
@@ -215,12 +245,14 @@ export class HtmlParser {
       this.nextChunk = (this.nextChunk || '') + chunk;
   }
 
-  private async parseAux(source = '', yieldTime = DEFAULT_YIELD_TIME, isFinal = !!source): Promise<DomNode> {
+  private async parseAux(source = '', yieldTime = DEFAULT_YIELD_TIME, isFinal = !!source): Promise<ParseResults> {
     this.parserRunning = true;
     this.htmlSource = source || '';
     this.htmlSourceIsFinal = isFinal;
+    this.parseResults = new ParseResults();
+    this.parseResults.domRoot = this.dom.getRoot();
 
-    return new Promise<DomNode>(resolve => {
+    return new Promise<ParseResults>(resolve => {
       this.yieldTime = yieldTime;
       this.parsingResolver = resolve;
 
@@ -228,8 +260,6 @@ export class HtmlParser {
         this.parseLoop().then(() => {
           if (this.parserRunning)
             setTimeout(parse);
-          else
-            resolve();
         });
       };
 
@@ -587,17 +617,26 @@ export class HtmlParser {
       this.callback('text', this.dom.getDepth() + 1, this.collectedSpace);
     }
 
-    this.callback('completion', this.dom.getRoot(), this.dom.getUnclosedTagCount());
-    this.parsingResolver(this.dom.getRoot());
+    [this.parseResults.unclosedTags, this.parseResults.implicitlyClosedTags] =
+      this.dom.getRoot().countUnclosed();
+    this.parseResults.lines = this.line;
+    this.parseResults.stopped = this.stopped;
+    this.parseResults.totalTime = processMillis() - this.parseResults.totalTime;
+
+    this.callback('completion', this.parseResults);
+    this.parsingResolver(this.parseResults);
     this.parserRunning = false;
   }
 
   private pop(tagLc: string, endTagText = '') {
-    if (!this.dom.pop(tagLc, endTagText, this.markupLine, this.markupColumn))
-       this.callback('error', `Mismatched closing tag </${tagLc}>`, this.line, this.column, '');
+    if (!this.dom.pop(tagLc, endTagText, this.markupLine, this.markupColumn)) {
+      ++this.parseResults.errors;
+      this.callback('error', `Unmatched closing tag </${tagLc}>`, this.line, this.column, '');
+    }
   }
 
   private reportError(message: string) {
+    ++this.parseResults.errors;
     this.callback('error', message, this.line, this.column, this.pendingSource);
     this.state = State.OUTSIDE_MARKUP;
     this.collectedSpace = '';
@@ -643,6 +682,7 @@ export class HtmlParser {
     if (!ch && this.sourceIndex >= this.htmlSource.length)
       return '';
     else {
+      ++this.parseResults.characters;
       ch = ch || this.htmlSource.charAt(this.sourceIndex++);
 
       if (ch === '\r') {
@@ -651,9 +691,11 @@ export class HtmlParser {
         if (!ch2 && !this.htmlSourceIsFinal) {
           // Special chunk boundary case.
           this.putBacks.push('--' + ch);
+          --this.parseResults.characters;
           return '';
         }
         else if (ch2 === '\n') {
+          ++this.parseResults.characters;
           ++this.sourceIndex;
           ch += '\n';
         }
@@ -679,6 +721,7 @@ export class HtmlParser {
         if (!ch2 && !this.htmlSourceIsFinal) {
           // Special chunk boundary case.
           this.putBacks.push('--' + ch);
+          --this.parseResults.characters;
           return '';
         }
         else {

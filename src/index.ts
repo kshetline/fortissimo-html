@@ -3,9 +3,8 @@ import fg from 'fast-glob';
 import fs from 'fs';
 import iconv from 'iconv-lite';
 
-import { DomElement, DomNode } from './dom';
-import { HtmlParser } from './html-parser';
-import { processMillis } from './util';
+import { DomNode } from './dom';
+import { HtmlParser, ParseResults } from './html-parser';
 
 const keepAlive = setInterval(() => {}, 100);
 const logDomTreeFlag = false;
@@ -46,7 +45,6 @@ async function processFile(file: string): Promise<void> {
       const rawStream = fs.createReadStream(file);
       const stream = rawStream.pipe(iconv.decodeStream(readEncoding, { stripBOM: true }));
       let content = '';
-      const startTime = processMillis();
       const parser = new HtmlParser();
       let rebuilt = '';
       let done: () => void;
@@ -69,55 +67,9 @@ async function processFile(file: string): Promise<void> {
           logProgress('comment:', comment + ' (' + depth + ')');
           rebuilt += '<!--' + comment + '-->';
         })
-        .on('completion', (domRoot, unclosed) => {
-          dom = domRoot;
-          content = content.replace(/\r\n|\n/g, '\n');
-
-          const totalTime = processMillis() - startTime;
-          let size = bytes / 1048576;
-          const speed = (size / totalTime * 1000);
-          const rebuiltMatches = (rebuilt === content);
-          const fromDom = dom ? dom.toString() : '';
-          const fromDomMatches = (fromDom === content);
-
-          if (logStatsFlag) {
-            let unit = 'MB';
-
-            if (size < 1) {
-              unit = 'KB';
-              size = content.length / 1024;
-            }
-
-            console.log('*** Finished %s%s in %s msec (%s MB/sec)', size.toFixed(2), unit, totalTime.toFixed(1), speed.toFixed(2));
-            console.log('*** unclosed tags: ' + unclosed);
-          }
-
-          if (logStatsFlag || (logErrorsFlag && !rebuiltMatches))
-            (rebuiltMatches ? console.log : console.error)('*** original matches rebuilt: ' + rebuiltMatches);
-
-          if (logStatsFlag || (logErrorsFlag && !fromDomMatches))
-            (fromDomMatches ? console.log : console.error)('*** original matches from-dom: ' + fromDomMatches);
-
-          if (!rebuiltMatches)
-            logErrors('--- rebuilt ---\n' + rebuilt + '\n------');
-          else if (logRebuiltFlag)
-            console.log('--- rebuilt ---\n' + rebuilt + '\n------');
-
-          if (!fromDomMatches)
-            logErrors('--- from dom ---\n' + fromDom + '\n------');
-          else if (logFromDomFlag)
-            console.log('--- from dom ---\n' + fromDom + '\n------');
-
-          if (logDomTreeFlag)
-            console.log(JSON.stringify(domRoot, (name, value) => {
-              if (name === 'parent')
-                return undefined;
-              else if (value instanceof DomElement && value.content !== null)
-                return value.toString();
-              else
-                return value;
-            }, 2));
-
+        .on('completion', results => {
+          dom = results.domRoot;
+          onCompletion(results, content, bytes, rebuilt);
           done();
         })
         .on('declaration', (depth, declaration) => {
@@ -138,8 +90,7 @@ async function processFile(file: string): Promise<void> {
           if (readEncoding === normalizedEncoding)
             return false;
 
-          if (logWarningFlag)
-            console.warn('*** Attempted encoding %s did not match declared encoding %s', readEncoding, normalizedEncoding);
+          logWarnings('*** Attempted encoding %s did not match declared encoding %s', readEncoding, normalizedEncoding);
 
           if (!iconv.encodingExists(normalizedEncoding)) {
             logErrors('*** Encoding %s is not supported', normalizedEncoding);
@@ -208,4 +159,59 @@ function logErrors(...args: any[]): void {
 function logProgress(...args: any[]): void {
   if (logProgressFlag)
     console.log(...args);
+}
+
+function logWarnings(...args: any[]): void {
+  if (logWarningFlag)
+    console.warn(...args);
+}
+
+function onCompletion(results: ParseResults, content: string, bytes: number, rebuilt: string): void {
+  content = content.replace(/\r\n|\n/g, '\n');
+
+  const dom = results.domRoot;
+  let size = bytes / 1048576;
+  const speed = (size / results.totalTime * 1000);
+  const rebuiltMatches = (rebuilt === content);
+  const fromDom = dom ? dom.toString() : '';
+  const fromDomMatches = (fromDom === content);
+
+  if (logStatsFlag) {
+    let unit = 'MB';
+
+    if (size < 1) {
+      unit = 'KB';
+      size = bytes / 1024;
+    }
+
+    console.log('*** Finished %s%s in %s msec (%s MB/sec)', size.toFixed(2), unit, results.totalTime.toFixed(1), speed.toFixed(2));
+    console.log('*** lines: %s, characters', results.lines, results.characters);
+    (results.unclosedTags > 0 ? console.warn : console.log)('*** unclosed tags: %s, implicitly closed: %s',
+      results.unclosedTags, results.implicitlyClosedTags);
+  }
+
+  if (!logStatsFlag && results.unclosedTags > 0)
+    logWarnings('*** unclosed tags: %s, implicitly closed: %s', results.unclosedTags, results.implicitlyClosedTags);
+
+  if (results.errors > 0)
+    logErrors('*** errors: %s', results.errors);
+
+  if (logStatsFlag || (logErrorsFlag && !rebuiltMatches))
+    (rebuiltMatches ? console.log : console.error)('*** original matches rebuilt: ' + rebuiltMatches);
+
+  if (logStatsFlag || (logErrorsFlag && !fromDomMatches))
+    (fromDomMatches ? console.log : console.error)('*** original matches from-dom: ' + fromDomMatches);
+
+  if (!rebuiltMatches)
+    logErrors('--- rebuilt ---\n' + rebuilt + '\n------');
+  else if (logRebuiltFlag)
+    console.log('--- rebuilt ---\n' + rebuilt + '\n------');
+
+  if (!fromDomMatches)
+    logErrors('--- from dom ---\n' + fromDom + '\n------');
+  else if (logFromDomFlag)
+    console.log('--- from dom ---\n' + fromDom + '\n------');
+
+  if (logDomTreeFlag)
+    console.log(JSON.stringify(dom, null, 2));
 }

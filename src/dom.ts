@@ -197,6 +197,30 @@ export class DomNode extends DomElement {
     this.endTagColumn = column;
   }
 
+  countUnclosed(): [number, number] {
+    let unclosed = 0;
+    let implicitlyClosed = 0;
+
+    if (!this.synthetic) {
+      if (this.closureState === ClosureState.UNCLOSED)
+        ++unclosed;
+      else if (this.closureState === ClosureState.IMPLICITLY_CLOSED)
+        ++implicitlyClosed;
+    }
+
+    if (this.children) {
+      this.children.forEach(child => {
+        if (child instanceof DomNode) {
+          const [childUnclosed, childImplicit] = child.countUnclosed();
+          unclosed += childUnclosed;
+          implicitlyClosed += childImplicit;
+        }
+      });
+    }
+
+    return [unclosed, implicitlyClosed];
+  }
+
   toJSON(): any {
     const json: any = { tag: this.tag };
 
@@ -414,10 +438,6 @@ export class DomModel {
 
   shouldParseCData(): boolean {
     return this.xmlMode || this.inMathOrSvg > 0;
-  }
-
-  getUnclosedTagCount(): number {
-    return Math.max(this.openStack.length - 1, 0);
   }
 
   private updateCurrentNode(): void {
