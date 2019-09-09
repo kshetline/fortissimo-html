@@ -202,7 +202,7 @@ export class HtmlParser {
     this.pendingCharset = '';
     this.pendingSource = '';
     this.putBacks = [];
-    this.resolveNextChunk = null;
+    this.resolveNextChunk = undefined;
     this.sourceIndex = 0;
     this.state = State.OUTSIDE_MARKUP;
     this.xmlMode = false;
@@ -225,8 +225,8 @@ export class HtmlParser {
       return;
     }
 
-    if (this.htmlSourceIsFinal)
-      throw new Error('Parse will no longer accept addition input');
+    if (this.htmlSourceIsFinal || this.nextChunkIsFinal)
+      throw new Error('Parser will no longer accept additional input');
 
     this.nextChunkIsFinal = isFinal || !chunk;
 
@@ -236,6 +236,7 @@ export class HtmlParser {
       this.nextChunk = '';
       this.sourceIndex = 0;
       this.resolveNextChunk(this.getChar());
+      this.resolveNextChunk = undefined;
     }
     else
       this.nextChunk = (this.nextChunk || '') + chunk;
