@@ -58,7 +58,7 @@ type EventType = 'attribute' | 'cdata' | 'comment' | 'completion' | 'declaration
                  'end-tag' | 'error' | 'generic' | 'processing' | 'request-data' | 'start-tag-end' |
                  'start-tag-start' | 'text';
 
-const CAN_BE_HANDLED_GENERICALLY = new Set(['cdata', 'comment', 'declaration', 'end-tag', 'processing',
+const CAN_BE_HANDLED_GENERICALLY = new Set(['attribute', 'cdata', 'comment', 'declaration', 'end-tag', 'processing',
                                             'start-tag-end', 'start-tag-start', 'text']);
 
 export class HtmlParser {
@@ -142,6 +142,7 @@ export class HtmlParser {
       return;
 
     switch (event) {
+      case 'attribute':       return cb(-1, args[0] + args[1] + args[2] + args[4] + args[3] + args[4]);
       case 'cdata':           return cb(args[0], '<![CDATA[' + args[1] + ']]>');
       case 'comment':         return cb(args[0], '<!--' + args[1] + '-->');
       case 'declaration':     return cb(args[0], '<!' + args[1] + '>');
