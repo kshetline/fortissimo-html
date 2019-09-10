@@ -54,7 +54,7 @@ export function fixBadChars(s: string): string {
   return s;
 }
 
-const basicEntities = {'<': '&lt;', '>': '&gt;', '&': '&amp;'} as any;
+const basicEntities: Record<string, string> = {'<': '&lt;', '>': '&gt;', '&': '&amp;'};
 
 export function minimalEscape(s: string): string {
   return s.replace(/[<>&]/g, match => basicEntities[match]);

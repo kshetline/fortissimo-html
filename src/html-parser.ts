@@ -419,6 +419,7 @@ export class HtmlParser {
         case State.AT_ATTRIBUTE_ASSIGNMENT:
           if (ch === '=') {
             this.preEqualsSpace = this.collectedSpace;
+            this.collectedSpace = '';
             this.state = State.AT_ATTRIBUTE_VALUE;
           }
           else {

@@ -216,5 +216,5 @@ function onCompletion(results: ParseResults, content: string, bytes: number, reb
   if (logDomTreeFlag)
     console.log(JSON.stringify(dom, null, 2));
 
-  fs.writeFileSync('/Users/kshetline/Desktop/sample.html', stylizeAsDocument(dom), {encoding: 'utf8'});
+  fs.writeFileSync('/Users/kshetline/Desktop/sample.html', stylizeAsDocument(dom, {showWhitespace: true}), {encoding: 'utf8'});
 }
