@@ -185,7 +185,7 @@ function onCompletion(results: ParseResults, content: string, bytes: number, reb
     }
 
     console.log('*** Finished %s%s in %s msec (%s MB/sec)', size.toFixed(2), unit, results.totalTime.toFixed(1), speed.toFixed(2));
-    console.log('*** lines: %s, characters', results.lines, results.characters);
+    console.log('*** lines: %s, characters: %s', results.lines, results.characters);
     (results.unclosedTags > 0 ? console.warn : console.log)('*** unclosed tags: %s, implicitly closed: %s',
       results.unclosedTags, results.implicitlyClosedTags);
   }

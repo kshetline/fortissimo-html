@@ -36,9 +36,21 @@ export abstract class DomElement {
     return depth;
   }
 
+  get originalDepth(): number {
+    let depth = -1;
+    let node = this.parent;
+
+    while (node) {
+      depth += (node.synthetic && node.parent ? 0 : 1);
+      node = node.parent;
+    }
+
+    return depth;
+  }
+
   // noinspection JSUnusedGlobalSymbols
   toJSON(): any {
-    return this.toString() + ' (' + this.depth +
+    return this.toString() + ' (' + this.originalDepth +
       (this.line ? `; ${this.line}, ${this.column}` : '') +
       (this.parent ? '; ' + this.parent.tag : '') + ')';
   }
@@ -237,6 +249,10 @@ export class DomNode extends DomElement {
       json.content = this.content;
 
     json.depth = this.depth;
+
+    if (this.originalDepth !== this.depth)
+      json.originalDepth = this.originalDepth;
+
     json.closureState = this.closureState;
 
     if (this.attributes.length > 0)
