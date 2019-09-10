@@ -5,6 +5,7 @@ import iconv from 'iconv-lite';
 
 import { DomNode } from './dom';
 import { HtmlParser, ParseResults } from './html-parser';
+import { stylizeAsDocument } from './stylizer';
 
 const keepAlive = setInterval(() => {}, 100);
 const logDomTreeFlag = false;
@@ -185,7 +186,7 @@ function onCompletion(results: ParseResults, content: string, bytes: number, reb
     }
 
     console.log('*** Finished %s%s in %s msec (%s MB/sec)', size.toFixed(2), unit, results.totalTime.toFixed(1), speed.toFixed(2));
-    console.log('*** lines: %s, characters', results.lines, results.characters);
+    console.log('*** lines: %s, characters: %s', results.lines, results.characters);
     (results.unclosedTags > 0 ? console.warn : console.log)('*** unclosed tags: %s, implicitly closed: %s',
       results.unclosedTags, results.implicitlyClosedTags);
   }
@@ -214,4 +215,6 @@ function onCompletion(results: ParseResults, content: string, bytes: number, reb
 
   if (logDomTreeFlag)
     console.log(JSON.stringify(dom, null, 2));
+
+  fs.writeFileSync('/Users/kshetline/Desktop/sample.html', stylizeAsDocument(dom), {encoding: 'utf8'});
 }
