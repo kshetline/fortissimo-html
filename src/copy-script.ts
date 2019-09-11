@@ -22,17 +22,17 @@ ${restoreWhitespace.toString()}
 `;
 
 function restoreWhitespaceStrict(s: string) {
-  return s.replace(/·|[\u2400-\u241F]|\S/g, ch => ch === '·' ? ' ' :
-           ch.charCodeAt(0) >= 0x2400 ? String.fromCharCode(ch.charCodeAt(0) - 0x2400) : '');
+  return s.replace(/·|[\u2400-\u241F]|\S/g, function(ch) { return ch === '·' ? ' ' :
+           ch.charCodeAt(0) >= 0x2400 ? String.fromCharCode(ch.charCodeAt(0) - 0x2400) : ''; });
 }
 
 function restoreWhitespace(s: string) {
-  return s.replace(/·|→\t|↵\n|␍\r|␍↵\r\n|→|↵|␍|[\u2400-\u241F]/g, ws =>
-    wsReplacements[ws] || (ws.charCodeAt(0) >= 0x2400 ? String.fromCharCode(ws.charCodeAt(0) - 0x2400) : ''));
+  return s.replace(/·|→\t|↵\n|␍\r|␍↵\r\n|→|↵|␍|[\u2400-\u241F]/g, function(ws) {
+    return wsReplacements[ws] || (ws.charCodeAt(0) >= 0x2400 ? String.fromCharCode(ws.charCodeAt(0) - 0x2400) : ''); });
 }
 
 function addListener() {
-  document.body.addEventListener('copy', (event) => {
+  document.body.addEventListener('copy', function(event) {
     var selection = document.getSelection();
     var newSelection;
     var copied = false;

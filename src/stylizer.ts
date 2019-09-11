@@ -11,6 +11,7 @@ export interface HtmlStyleOptions {
   colors?: Record<HtmlColor, string>;
   dark?: boolean;
   font?: string;
+  includeCopyScript?: boolean;
   showWhitespace?: boolean;
   stylePrefix?: string;
 }
@@ -18,6 +19,7 @@ export interface HtmlStyleOptions {
 const DEFAULT_OPTIONS = {
   dark: true,
   font: '12px Menlo, "Courier New", monospace',
+  includeCopyScript: true,
   showWhitespace: false,
   stylePrefix: 'fh'
 };
@@ -72,9 +74,9 @@ export function stylizeAsDocument(elem: DomElement, titleOrOptions?: string | Ht
   <style>
 ${generateCss(options)}  </style>
 </head>
-<body class="${options.stylePrefix}-html">${stylize(elem, options)}<script>
-${copyScriptAsIIFE.replace(/'\*-whitespace'/g, `'${options.stylePrefix}-whitespace'`)}
-</script></body></html>`;
+<body class="${options.stylePrefix}-html">${stylize(elem, options)}${options.includeCopyScript ?
+    '<script>' + copyScriptAsIIFE.replace(/'\*-whitespace'/g, "'" + options.stylePrefix + "-whitespace'") + '</script>'
+: ''}</body></html>`;
 }
 
 export function stylize(elem: DomElement, options?: HtmlStyleOptions): string {
