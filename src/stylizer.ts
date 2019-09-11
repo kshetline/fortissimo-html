@@ -6,6 +6,61 @@ export interface HtmlStyleOptions {
   showWhitespace?: boolean;
 }
 
+const copyScript = `<script>
+function restoreWhitespaceStrict(s) {
+  return s.replace(/·|[\\u2400-\\u241F]|\\S/g, ch => ch === '·' ? ' ' :
+           ch.charCodeAt(0) >= 0x2400 ? String.fromCharCode(ch.charCodeAt(0) - 0x2400) : '');
+}
+
+const wsReplacements = {
+  '·': ' ',
+  '→\\t': '\\t',
+  '↵\\n': '\\n',
+  '␍\\r': '\\r',
+  '␍↵\\r\\n': '\\r\\n'
+}
+
+function restoreWhitespace(s) {
+  return s.replace(/·|→\\t|↵\\n|␍\\r|␍↵\\r\\n|→|↵|␍|[\\u2400-\\u241F]/g, ws =>
+    wsReplacements[ws] || (ws.charCodeAt(0) >= 0x2400 ? String.fromCharCode(ws.charCodeAt(0) - 0x2400) : ''));
+}
+
+document.body.addEventListener('copy', (event) => {
+  const selection = document.getSelection();
+  let newSelection;
+  let copied = false;
+
+  if (selection.anchorNode && selection.getRangeAt) {
+    try {
+      const nodes = selection.getRangeAt(0).cloneContents().childNodes;
+      let parts = [];
+
+      // nodes isn't a "real" array - no forEach!
+      for (let i = 0; i < nodes.length; ++i) {
+        const node = nodes[i];
+
+        if (node.classList && node.classList.contains('whitespace'))
+          parts.push(restoreWhitespaceStrict(node.innerText));
+        else if (node.localName === 'span')
+          parts.push(node.innerText);
+        else
+          parts.push(node.nodeValue);
+      }
+
+      newSelection = parts.join('');
+      copied = true;
+    }
+    catch (err) {}
+  }
+
+  if (!copied)
+    newSelection = restoreWhitespace(selection.toString());
+
+  event.clipboardData.setData('text/plain', newSelection);
+  event.preventDefault();
+});
+</script>`;
+
 export function stylizeAsDocument(elem: DomElement, title?: string): string;
 // tslint:disable-next-line:unified-signatures
 export function stylizeAsDocument(elem: DomElement, options?: HtmlStyleOptions): string;
@@ -64,7 +119,7 @@ export function stylizeAsDocument(elem: DomElement, titleOrOptions?: string | Ht
     }
   </style>
 </head>
-<body class="html">` + stylize(elem, options) + `</body>
+<body class="html">` + stylize(elem, options) + copyScript + `</body>
 </html>`;
 }
 
@@ -120,14 +175,16 @@ export function stylize(elem: DomElement, options?: HtmlStyleOptions): string {
       elem.children.forEach(child => result.push(stylize(child, options)));
 
     if (!elem.synthetic && elem.closureState === ClosureState.EXPLICITLY_CLOSED) {
-      result.push(markup('</', 'markup', false));
+      const terminated = elem.endTagText.endsWith('>');
 
-      if (elem.endTagText.endsWith('>')) {
+      result.push(markup('</', terminated ? 'markup' : 'error', false));
+
+      if (terminated) {
         result.push(markup(elem.endTagText.substring(2, elem.endTagText.length - 1), 'tag', showWhitespace));
         result.push(markup('>', 'markup', false));
       }
       else
-        result.push(markup(elem.endTagText.substr(2), 'tag', false));
+        result.push(markup(elem.endTagText.substr(2), 'error', false));
     }
 
     return result.join('');
