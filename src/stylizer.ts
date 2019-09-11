@@ -73,8 +73,9 @@ export function stylizeAsDocument(elem: DomElement, titleOrOptions?: string | Ht
   <style>
 ${generateCss(options)}  </style>
 </head>
-<body class="${options.stylePrefix}-html">${stylize(elem, options)}<script>${copyScript}</script></body>
-</html>`;
+<body class="${options.stylePrefix}-html">${stylize(elem, options)}<script>
+${copyScript.replace(/'\*-whitespace'/g, `'${options.stylePrefix}-whitespace'`)}
+</script></body></html>`;
 }
 
 export function stylize(elem: DomElement, options?: HtmlStyleOptions): string {

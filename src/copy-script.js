@@ -30,7 +30,7 @@ document.body.addEventListener('copy', (event) => {
       for (let i = 0; i < nodes.length; ++i) {
         const node = nodes[i];
 
-        if (node.classList && node.classList.contains('whitespace'))
+        if (node.classList && node.classList.contains('*-whitespace'))
           parts.push(restoreWhitespaceStrict(node.innerText));
         else if (node.localName === 'span')
           parts.push(node.innerText);
