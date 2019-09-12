@@ -1,3 +1,5 @@
+import * as entities from './entities.json';
+
 export function isWhitespace(ch: string) {
   return ch && ch <= ' ';
 }
@@ -58,4 +60,14 @@ const basicEntities: Record<string, string> = {'<': '&lt;', '>': '&gt;', '&': '&
 
 export function minimalEscape(s: string): string {
   return s.replace(/[<>&]/g, match => basicEntities[match]);
+}
+
+export function isKnownEntity(entity: string): boolean {
+  if (entity.startsWith('&'))
+    entity = entity.substr(1);
+
+  if (entity.endsWith(';'))
+    entity = entity.substr(0, entity.length - 1);
+
+  return entity in entities;
 }

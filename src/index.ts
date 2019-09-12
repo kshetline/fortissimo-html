@@ -5,7 +5,7 @@ import iconv from 'iconv-lite';
 
 import { DomNode } from './dom';
 import { HtmlParser, ParseResults } from './html-parser';
-import { stylizeAsDocument } from './stylizer';
+import { stylizeHtml } from './stylizer';
 
 const keepAlive = setInterval(() => {}, 100);
 const logDomTreeFlag = false;
@@ -216,6 +216,6 @@ function onCompletion(results: ParseResults, content: string, bytes: number, reb
   if (logDomTreeFlag)
     console.log(JSON.stringify(dom, null, 2));
 
-  fs.writeFileSync('/Users/kshetline/Desktop/sample.html', stylizeAsDocument(dom,
-    {dark: true, showWhitespace: true}), {encoding: 'utf8'});
+  fs.writeFileSync('/Users/kshetline/Desktop/sample.html', stylizeHtml(dom,
+    { showWhitespace: true }), { encoding: 'utf8' });
 }

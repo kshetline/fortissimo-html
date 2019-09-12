@@ -1,85 +1,85 @@
 import { copyScriptAsIIFE } from './copy-script';
 import { ClosureState, CData, CommentElement, DeclarationElement, DocType, DomElement, DomNode, ProcessingElement,
   TextElement, UnmatchedClosingTag } from './dom';
-import { isWhitespace, minimalEscape } from './characters';
+import { isKnownEntity, isWhitespace, minimalEscape } from './characters';
 import { NO_ENTITIES_ELEMENTS } from './elements';
 
 type HtmlColor = 'attrib' | 'background' | 'comment' | 'entity' | 'error' | 'foreground' |
-                 'markup' | 'tag' | 'value' | 'whitespace';
+                 'markup' | 'tag' | 'value' | 'warning' | 'whitespace';
 
 export interface HtmlStyleOptions {
   colors?: Record<HtmlColor, string>;
   dark?: boolean;
   font?: string;
   includeCopyScript?: boolean;
+  outerTag?: 'html' | 'body' | 'div';
   showWhitespace?: boolean;
   stylePrefix?: string;
+  title?: string;
 }
 
 const DEFAULT_OPTIONS = {
   dark: true,
   font: '12px Menlo, "Courier New", monospace',
   includeCopyScript: true,
+  outerTag: 'html',
   showWhitespace: false,
-  stylePrefix: 'fh'
+  stylePrefix: 'fh',
+  title: 'Stylized HTML'
 };
 
 const DEFAULT_DARK_THEME: Record<HtmlColor, string> = {
   attrib: '#9CDCFE',
   background: '#1E1E1E',
   comment: '#699856',
-  entity: '#6D9CBE',
-  error: '#BC3F3C',
+  entity: '#66BBBB',
+  error: '#CC4444',
   foreground: '#D4D4D4',
   markup: '#808080',
   tag: '#569CD6',
   value: '#CE9178',
+  warning: '#F49810',
   whitespace: '#605070'
 };
 
 const DEFAULT_LIGHT_THEME: Record<HtmlColor, string> = {
-  attrib: '#0000FF',
+  attrib: '#5544FF',
   background: '#FFFFFF',
   comment: '#80B0B0',
-  entity: '#0000FF',
+  entity: '#0088DD',
   error: '#D40000',
   foreground: '#222222',
   markup: '#808080',
   tag: '#000080',
   value: '#008088',
+  warning: '#F49810',
   whitespace: '#C0D0F0'
 };
 
 const COLORS = Object.keys(DEFAULT_LIGHT_THEME);
 
-export function stylizeAsDocument(elem: DomElement, title?: string): string;
-// tslint:disable-next-line:unified-signatures
-export function stylizeAsDocument(elem: DomElement, options?: HtmlStyleOptions): string;
-
-export function stylizeAsDocument(elem: DomElement, titleOrOptions?: string | HtmlStyleOptions, options?: HtmlStyleOptions): string {
-  let title = 'Stylized HTML';
-
-  if (typeof titleOrOptions === 'string')
-    title = titleOrOptions;
-  else
-    options = titleOrOptions;
-
+export function stylizeHtml(elem: DomElement, options?: HtmlStyleOptions): string {
   options = processOptions(options);
 
-  return `<!DOCTYPE html>
+  const fullDocument = (options.outerTag === 'html');
+  const tag = fullDocument ? 'body' : options.outerTag;
+
+  return (fullDocument ? `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8"/>
-  <title>${title}</title>
+  <title>${options.title}</title>
   <style>
 ${generateCss(options)}  </style>
 </head>
-<body class="${options.stylePrefix}-html">${stylize(elem, options)}${options.includeCopyScript ?
-    '<script>' + copyScriptAsIIFE.replace(/'\*-whitespace'/g, "'" + options.stylePrefix + "-whitespace'") + '</script>'
-: ''}</body></html>`;
+` : '') +
+`<${tag} class="${options.stylePrefix}-html">${stylize(elem, options)}${options.includeCopyScript ?
+    '<script>' + copyScriptAsIIFE.replace(/'(\.?)\*-(html|whitespace)'/g,
+      "'$1" + options.stylePrefix + "-$2'") + '</script>'
+: ''}</${tag}>` + (fullDocument ? '</html>' : '');
 }
 
-export function stylize(elem: DomElement, options?: HtmlStyleOptions): string {
+function stylize(elem: DomElement, options?: HtmlStyleOptions): string {
   const pf = options.stylePrefix + '-';
   const ws = options.showWhitespace ? pf : null;
 
@@ -203,15 +203,51 @@ function markup(s: string, qlass: string, separateWhitespace: string, markEntiti
     });
   }
   else if (markEntities) {
-    return s.replace(/&.+?;|.+/g, match => {
-      if (match.startsWith('&'))
-        return markup(match, markEntities + 'entity', null, null);
-      else if (qlass)
-        return markup(match, qlass, null, null);
-      else
-        return minimalEscape(match);
-    });
+    const sb: string[] = [];
+
+    while (s) {
+      const $ = /(?:&(?:amp(?:;?)|#\d+(?:;|\b|(?=\D))|#x[0-9a-f]+(?:;|\b|(?=[^0-9a-f]))|[0-9a-z]+(?:;|\b|(?=[^0-9a-z]))))/i.exec(s);
+
+      if ($) {
+        const eClass = getEntityClass($[0], s.charAt($.index + $[0].length), qlass && qlass.endsWith('value'));
+
+        if ($.length > 0)
+          sb.push(markup(s.substr(0, $.index), qlass, null, null));
+
+        sb.push(markup($[0], markEntities + eClass, null, null));
+
+        s = s.substr($.index + $[0].length);
+      }
+      else {
+        sb.push(markup(s, qlass, null, null));
+        break;
+      }
+    }
+
+    return sb.join('');
   }
 
   return `<span class="${qlass}">${minimalEscape(s)}</span>`;
+}
+
+function getEntityClass(entity: string, nextChar: string, forAttribValue: boolean): string {
+  entity = entity.substr(1);
+
+  if (entity.endsWith(';')) {
+    let cp: number;
+
+    entity = entity.substr(0, entity.length - 1);
+
+    if (entity.toLowerCase().startsWith('#x'))
+      return isNaN(cp = parseInt(entity.substr(2), 16)) || cp > 0x10FFFF ? 'error' : 'entity';
+
+    if (entity.toLowerCase().startsWith('#'))
+      return isNaN(cp = parseInt(entity.substr(1), 10)) || cp > 0x10FFFF ? 'error' : 'entity';
+
+    return isKnownEntity(entity) ? 'entity' : 'warning';
+  }
+  else if (forAttribValue)
+    return 'value';
+  else
+    return 'warning';
 }
