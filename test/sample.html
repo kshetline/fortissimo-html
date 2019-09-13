@@ -65,14 +65,15 @@
   <? an ignored processing instruction, followed by an unmatched tag >
   </td>
   <th>This doesn't belong here</th>
-  <p>Good/bad entities: &ampruns together &lt &gt. &#77,&#88; &aacute-&eacute;</p>
+  <p>Good/bad entities: &ampruns together &lt &gt. &#77,&#88; &aacute-&eacute; &#xD907;</p>
   <p test="&ampnosemi">_&#XBD;&#xBE;&#x3ah; &#36a; &0; &foo; &#9999999; &copy; &</p>
   <! -- not a comment >
+  <!-- Valid and invalid characters: 	   -->
   <div class="backdrop" class="duplicate-attribute-&quot;ignored">
     <div class='outer-wrapper'  >
       <div class="sizer">&nbsp;</div>
       <!-- Very sloppy attribute values -->
-      <input type=hidden
+      <input type=hidden a=b	c=d
              foo==bar/>
       <div class="inner-wrapper" foo==bar/baz&>
         <div class = "content">

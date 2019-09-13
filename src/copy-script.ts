@@ -22,17 +22,16 @@ ${restoreWhitespace.toString()}
 `;
 
 export function restoreWhitespaceStrict(s: string) {
-  return s.replace(/·|[\u2400-\u241F]|\S/g, function(ch) { return ch === '·' ? ' ' :
-           ch.charCodeAt(0) >= 0x2400 ? String.fromCharCode(ch.charCodeAt(0) - 0x2400) : ''; });
+  return s.replace(/\S/g, function(ch) { return ch === '·' ? ' ' : ''; });
 }
 
 export function restoreWhitespace(s: string) {
-  return s.replace(/·|→\t|↵\n|␍\r|␍↵\r\n|→|↵|␍|[\u2400-\u241F]/g, function(ws) {
-    return wsReplacements[ws] || (ws.charCodeAt(0) >= 0x2400 ? String.fromCharCode(ws.charCodeAt(0) - 0x2400) : ''); });
+  return s.replace(/·|→\t|↵\n|␍\r|␍↵\r\n|→|↵|␍|�/g, function(ws) {
+    return wsReplacements[ws] || ''; });
 }
 
 export function addListener() {
-  var doc = document.querySelector('.*-html') as HTMLElement;
+  var doc = document.querySelector('.xxx-html') as HTMLElement;
 
   if (!doc)
     return;
@@ -51,7 +50,7 @@ export function addListener() {
         for (var i = 0; i < nodes.length; ++i) {
           var node = nodes[i] as any;
 
-          if (node.classList && node.classList.contains('*-whitespace'))
+          if (node.classList && (node.classList.contains('xxx-invalid') || node.classList.contains('xxx-whitespace')))
             parts.push(restoreWhitespaceStrict(node.innerText));
           else if (node.localName === 'span')
             parts.push(node.innerText);

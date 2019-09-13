@@ -1,11 +1,20 @@
 import * as entities from './entities.json';
 
-export function isWhitespace(ch: string) {
-  return ch && ch <= ' ';
+export function isWhitespace(ch: string): boolean {
+  return ch === '\t' || ch === '\n' || ch === '\f' || ch === '\r' || ch === ' ';
 }
 
 export function isEol(ch: string): boolean {
   return ch === '\n' || ch === '\r' || ch === '\r\n';
+}
+
+export function isInvalidCharacter(ch: string): boolean {
+  return /[\x00-\x08\x0B\x0E-\x1F\x7F-\x9F]/.test(ch);
+}
+
+export function replaceIsolatedSurrogates(s: string): string {
+  return s && s.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|[^\uD800-\uDBFF][\uDC00-\uDFFF]/g,
+      ch => ch.length === 1 ? '\x02' : ch.charAt(0) + '\x03');
 }
 
 export function isMarkupStart(ch: string) {
@@ -70,4 +79,12 @@ export function isKnownEntity(entity: string): boolean {
     entity = entity.substr(0, entity.length - 1);
 
   return entity in entities;
+}
+
+export function codepointLength(s: string): number {
+  return s ? s.length - (s.match(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g) || []).length : 0;
+}
+
+export function isValidEntityCodepoint(cp: number): boolean {
+  return cp > 0 && cp <= 0x10FFFF && cp !== 0x0D && (cp < 0x80 || cp > 0x9F) && (cp < 0xD800 || cp > 0xDFFF);
 }

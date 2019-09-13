@@ -1,10 +1,10 @@
 import { copyScriptAsIIFE } from './copy-script';
 import { ClosureState, CData, CommentElement, DeclarationElement, DocType, DomElement, DomNode, ProcessingElement,
   TextElement, UnmatchedClosingTag } from './dom';
-import { isKnownEntity, isWhitespace, minimalEscape } from './characters';
+import { isKnownEntity, isValidEntityCodepoint, isWhitespace, minimalEscape, replaceIsolatedSurrogates } from './characters';
 import { NO_ENTITIES_ELEMENTS } from './elements';
 
-type HtmlColor = 'attrib' | 'background' | 'comment' | 'entity' | 'error' | 'foreground' |
+type HtmlColor = 'attrib' | 'background' | 'comment' | 'entity' | 'error' | 'foreground' | 'invalid' |
                  'markup' | 'tag' | 'value' | 'warning' | 'whitespace';
 
 export interface HtmlStyleOptions {
@@ -35,6 +35,7 @@ const DEFAULT_DARK_THEME: Record<HtmlColor, string> = {
   entity: '#66BBBB',
   error: '#CC4444',
   foreground: '#D4D4D4',
+  invalid: '#FF00FF',
   markup: '#808080',
   tag: '#569CD6',
   value: '#CE9178',
@@ -49,6 +50,7 @@ const DEFAULT_LIGHT_THEME: Record<HtmlColor, string> = {
   entity: '#0088DD',
   error: '#D40000',
   foreground: '#222222',
+  invalid: '#FF00FF',
   markup: '#808080',
   tag: '#000080',
   value: '#008088',
@@ -74,7 +76,7 @@ ${generateCss(options)}  </style>
 </head>
 ` : '') +
 `<${tag} class="${options.stylePrefix}-html">${stylize(elem, options)}${options.includeCopyScript ?
-    '<script>' + copyScriptAsIIFE.replace(/'(\.?)\*-(html|whitespace)'/g,
+    '<script>' + copyScriptAsIIFE.replace(/'(\.?)xxx-(html|invalid|whitespace)'/g,
       "'$1" + options.stylePrefix + "-$2'") + '</script>'
 : ''}</${tag}>` + (fullDocument ? '</html>' : '');
 }
@@ -117,7 +119,14 @@ function stylize(elem: DomElement, options?: HtmlStyleOptions): string {
         result.push(markup(elem.spacing[index], null, ws, null));
         result.push(markup(attrib, pf + 'attrib', null, null));
         result.push(markup(elem.equals[index] || '', null, ws, null));
-        result.push(markup(elem.quotes[index] + elem.values[index] + elem.quotes[index], pf + 'value', ws, pf));
+
+        const quote = elem.quotes[index];
+        const value = quote + elem.values[index] + quote;
+
+        if (!quote && /["'<=>`]/.test(value))
+          result.push(markup(value, pf + 'warning', null, null));
+        else
+          result.push(markup(value, pf + 'value', ws, pf));
       });
 
       result.push(markup(elem.innerWhitespace, null, ws, null));
@@ -187,19 +196,29 @@ const whitespaces: Record<string, string> = {
 };
 
 function markup(s: string, qlass: string, separateWhitespace: string, markEntities: string): string {
-  if (!separateWhitespace && !qlass && !markEntities)
+  if (!s)
+    return '';
+  else if (!separateWhitespace && !qlass && !markEntities)
     return minimalEscape(s);
   else if (separateWhitespace) {
     return s.replace(/\s+|\S+/g, match => {
       if (isWhitespace(match.charAt(0))) {
-        match = match.replace(/\r\n|./gs, ch => whitespaces[ch] || String.fromCharCode(0x2400 + ch.charCodeAt(0)));
+        match = match.replace(/\r\n|./gs, ch => whitespaces[ch]);
 
         return markup(match, separateWhitespace + 'whitespace', null, null);
       }
-      else if (qlass || markEntities)
-        return markup(match, qlass, null, markEntities);
-      else
-        return minimalEscape(match);
+      else {
+        return replaceIsolatedSurrogates(match).split(/([\x00-\x08\x0B\x0E-\x1F\x7F-\x9F]+)/g).map((match2, index) => {
+          if (index % 2 === 0) {
+            if (qlass || markEntities)
+              return markup(match2, qlass, null, markEntities);
+            else
+              return minimalEscape(match2);
+          }
+          else
+            return markup('�'.repeat(match2.length), separateWhitespace + 'invalid', null, null);
+        }).join('');
+      }
     });
   }
   else if (markEntities) {
@@ -239,10 +258,10 @@ function getEntityClass(entity: string, nextChar: string, forAttribValue: boolea
     entity = entity.substr(0, entity.length - 1);
 
     if (entity.toLowerCase().startsWith('#x'))
-      return isNaN(cp = parseInt(entity.substr(2), 16)) || cp > 0x10FFFF ? 'error' : 'entity';
+      return isNaN(cp = parseInt(entity.substr(2), 16)) || !isValidEntityCodepoint(cp) ? 'error' : 'entity';
 
     if (entity.toLowerCase().startsWith('#'))
-      return isNaN(cp = parseInt(entity.substr(1), 10)) || cp > 0x10FFFF ? 'error' : 'entity';
+      return isNaN(cp = parseInt(entity.substr(1), 10)) || !isValidEntityCodepoint(cp) ? 'error' : 'entity';
 
     return isKnownEntity(entity) ? 'entity' : 'warning';
   }
