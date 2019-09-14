@@ -111,9 +111,9 @@ export class DocType extends DeclarationElement {
 
     this.type = /\bxhtml\b/i.test(content) ? 'xhtml' : 'html';
     this.variety = (/\b(frameset|strict|transitional)\b/i.exec(content.toLowerCase()) || [])[1] as any;
-    this.version = (/\bx?html\s*([.\d]+)\b/i.exec(content) || [])[1] as any;
+    this.version = (/\bx?html[ \n\r\t\f]*([.\d]+)\b/i.exec(content) || [])[1] as any;
 
-    if (!this.version && /^doctype\s+html\s*$/i.test(content))
+    if (!this.version && /^doctype[ \n\r\t\f]+html[ \n\r\t\f]*$/i.test(content))
       this.version = '5';
   }
 }

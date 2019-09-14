@@ -1,11 +1,11 @@
 import { copyScriptAsIIFE } from './copy-script';
 import { ClosureState, CData, CommentElement, DeclarationElement, DocType, DomElement, DomNode, ProcessingElement,
   TextElement, UnmatchedClosingTag } from './dom';
-import { isKnownEntity, isValidEntityCodepoint, isWhitespace, minimalEscape, replaceIsolatedSurrogates } from './characters';
+import { isKnownEntity, isValidEntityCodepoint, minimalEscape, replaceIsolatedSurrogates } from './characters';
 import { NO_ENTITIES_ELEMENTS } from './elements';
 
-type HtmlColor = 'attrib' | 'background' | 'comment' | 'entity' | 'error' | 'foreground' | 'invalid' |
-                 'markup' | 'tag' | 'value' | 'warning' | 'whitespace';
+type HtmlColor = 'attrib' | 'background' | 'bg_whitespace' | 'comment' | 'entity' | 'error' | 'foreground' |
+                 'invalid' | 'markup' | 'tag' | 'value' | 'warning' | 'whitespace';
 
 export interface HtmlStyleOptions {
   colors?: Record<HtmlColor, string>;
@@ -31,6 +31,7 @@ const DEFAULT_OPTIONS = {
 const DEFAULT_DARK_THEME: Record<HtmlColor, string> = {
   attrib: '#9CDCFE',
   background: '#1E1E1E',
+  bg_whitespace: '#555555',
   comment: '#699856',
   entity: '#66BBBB',
   error: '#CC4444',
@@ -46,6 +47,7 @@ const DEFAULT_DARK_THEME: Record<HtmlColor, string> = {
 const DEFAULT_LIGHT_THEME: Record<HtmlColor, string> = {
   attrib: '#5544FF',
   background: '#FFFFFF',
+  bg_whitespace: '#CCCCCC',
   comment: '#80B0B0',
   entity: '#0088DD',
   error: '#D40000',
@@ -83,58 +85,58 @@ ${generateCss(options)}  </style>
 
 function stylize(elem: DomElement, options?: HtmlStyleOptions): string {
   const pf = options.stylePrefix + '-';
-  const ws = options.showWhitespace ? pf : null;
+  const ws = options.showWhitespace;
 
   if (elem instanceof CommentElement)
-    return markup(elem.toString(), pf + 'comment', ws, null);
+    return markup(elem.toString(), pf, 'comment', ws, false);
   else if (elem instanceof CData) {
-    return markup('<![CDATA[', pf + 'markup', null, null) +
-      markup(elem.content, null, ws, null) +
-      markup(']]>', pf + 'markup', null, null);
+    return markup('<![CDATA[', pf, 'markup', false, false) +
+      markup(elem.content, pf, null, ws, false) +
+      markup(']]>', pf, 'markup', false, false);
   }
   else if (elem instanceof DocType) {
-    return elem.toString().replace(/("[^"]*?"\s*|[^ ">]+\s*|.+)/g, match => {
+    return elem.toString().replace(/("[^"]*?"[ \n\r\t\f]*|[^ ">]+[ \n\r\t\f]*|.+)/g, match => {
       if (match.startsWith('"'))
-        return markup(match, pf + 'value', ws, null);
+        return markup(match, pf, 'value', ws, false);
       else if (/^\w/.test(match))
-        return markup(match, pf + 'attrib', ws, null);
+        return markup(match, pf, 'attrib', ws, false);
       else
-        return markup(match, pf + 'markup', ws, null);
+        return markup(match, pf, 'markup', ws, false);
     });
   }
   else if (elem instanceof DeclarationElement || elem instanceof ProcessingElement)
-    return markup(elem.toString(), pf + 'markup', ws, null);
+    return markup(elem.toString(), pf, 'markup', ws, false);
   else if (elem instanceof TextElement)
-    return markup(elem.toString(), null, ws, elem.parent && NO_ENTITIES_ELEMENTS.has(elem.parent.tagLc) ? null : pf);
+    return markup(elem.toString(), pf, null, ws, !elem.parent || !NO_ENTITIES_ELEMENTS.has(elem.parent.tagLc));
   else if (elem instanceof UnmatchedClosingTag)
-    return markup(elem.toString(), pf + 'error', ws, null);
+    return markup(elem.toString(), pf, 'error', ws, false);
   else if (elem instanceof DomNode) {
     const result: string[] = [];
 
     if (!elem.synthetic) {
-      result.push(markup('<', pf + 'markup', null, null));
-      result.push(markup(elem.tag, pf + 'tag', null, null));
+      result.push(markup('<', pf, 'markup', false, false));
+      result.push(markup(elem.tag, pf, 'tag', false, false));
 
       elem.attributes.forEach((attrib, index) => {
-        result.push(markup(elem.spacing[index], null, ws, null));
-        result.push(markup(attrib, pf + 'attrib', null, null));
-        result.push(markup(elem.equals[index] || '', null, ws, null));
+        result.push(markup(elem.spacing[index], pf, null, ws, false));
+        result.push(markup(attrib, pf, 'attrib', false, false));
+        result.push(markup(elem.equals[index] || '', pf, null, ws, false));
 
         const quote = elem.quotes[index];
         const value = quote + elem.values[index] + quote;
 
         if (!quote && /["'<=>`]/.test(value))
-          result.push(markup(value, pf + 'warning', null, null));
+          result.push(markup(value, pf, 'warning', false, false));
         else
-          result.push(markup(value, pf + 'value', ws, pf));
+          result.push(markup(value, pf, 'value', ws, true));
       });
 
-      result.push(markup(elem.innerWhitespace, null, ws, null));
+      result.push(markup(elem.innerWhitespace, pf, null, ws, false));
 
       if (elem.closureState === ClosureState.SELF_CLOSED)
-        result.push(markup('/>', pf + 'markup', null, null));
+        result.push(markup('/>', pf, 'markup', false, false));
       else
-        result.push(markup('>', pf + 'markup', null, null));
+        result.push(markup('>', pf, 'markup', false, false));
     }
 
     if (elem.children)
@@ -143,14 +145,14 @@ function stylize(elem: DomElement, options?: HtmlStyleOptions): string {
     if (!elem.synthetic && elem.closureState === ClosureState.EXPLICITLY_CLOSED) {
       const terminated = elem.endTagText.endsWith('>');
 
-      result.push(markup('</', pf + (terminated ? 'markup' : 'error'), null, null));
+      result.push(markup('</', pf, terminated ? 'markup' : 'error', false, false));
 
       if (terminated) {
-        result.push(markup(elem.endTagText.substring(2, elem.endTagText.length - 1), pf + 'tag', ws, null));
-        result.push(markup('>', pf + 'markup', null, null));
+        result.push(markup(elem.endTagText.substring(2, elem.endTagText.length - 1), pf, 'tag', ws, false));
+        result.push(markup('>', pf, 'markup', false, false));
       }
       else
-        result.push(markup(elem.endTagText.substr(2), pf + 'error', null, null));
+        result.push(markup(elem.endTagText.substr(2), pf, 'error', false, false));
     }
 
     return result.join('');
@@ -180,9 +182,12 @@ function generateCss(options: HtmlStyleOptions) {
 
 `;
 
-  COLORS.forEach(color => css +=
-`  .${prefix}-${color} { color: ${(options.colors as any)[color]}; }
-`);
+  COLORS.forEach(color => {
+    const property = color.startsWith('bg_') ? 'background-color' : 'color';
+    const value = (options.colors as any)[color];
+
+    css += `  .${prefix}-${color} { ${property}: ${value}; }\n`;
+  });
 
   return css;
 }
@@ -191,35 +196,42 @@ const whitespaces: Record<string, string> = {
   ' ': '·',
   '\t': '→\t',
   '\n': '↵\n',
+  '\f': '↧\f',
   '\r': '␍\r',
   '\r\n': '␍↵\r\n'
 };
 
-function markup(s: string, qlass: string, separateWhitespace: string, markEntities: string): string {
+function markup(s: string, prefix: string, qlass: string, markWhitespace: boolean, markEntities: boolean): string {
   if (!s)
     return '';
-  else if (!separateWhitespace && !qlass && !markEntities)
+  else if (!markWhitespace && !qlass && !markEntities)
     return minimalEscape(s);
-  else if (separateWhitespace) {
-    return s.replace(/\s+|\S+/g, match => {
-      if (isWhitespace(match.charAt(0))) {
+  else if (markWhitespace) {
+    return s.split(/([ \n\r\t\f]+)/).map((match, index) => {
+      if (index % 2 === 1) {
         match = match.replace(/\r\n|./gs, ch => whitespaces[ch]);
 
-        return markup(match, separateWhitespace + 'whitespace', null, null);
+        return markup(match, prefix, 'whitespace', false, false);
       }
       else {
-        return replaceIsolatedSurrogates(match).split(/([\x00-\x08\x0B\x0E-\x1F\x7F-\x9F]+)/g).map((match2, index) => {
-          if (index % 2 === 0) {
-            if (qlass || markEntities)
-              return markup(match2, qlass, null, markEntities);
-            else
-              return minimalEscape(match2);
+        match = replaceIsolatedSurrogates(match);
+
+        return match.split(/([\x00-\x08\x0B\x0E-\x1F\x7F-\x9F]+)/).map((match2, index2) => {
+          if (index2 % 2 === 1)
+            return markup('�'.repeat(match2.length), prefix, 'invalid', false, false);
+          else {
+            return match2.split(/(\xA0|[\u2000-\u200A]|\u202F|\u205F|\u3000)/).map((match3, index3) => {
+              if (index3 % 2 === 1)
+                return markup(match3, prefix, 'bg_whitespace', false, false);
+              else if (qlass || markEntities)
+                return markup(match3, prefix, qlass, false, markEntities);
+              else
+                return minimalEscape(match3);
+            }).join('');
           }
-          else
-            return markup('�'.repeat(match2.length), separateWhitespace + 'invalid', null, null);
         }).join('');
       }
-    });
+    }).join('');
   }
   else if (markEntities) {
     const sb: string[] = [];
@@ -231,14 +243,14 @@ function markup(s: string, qlass: string, separateWhitespace: string, markEntiti
         const eClass = getEntityClass($[0], s.charAt($.index + $[0].length), qlass && qlass.endsWith('value'));
 
         if ($.length > 0)
-          sb.push(markup(s.substr(0, $.index), qlass, null, null));
+          sb.push(markup(s.substr(0, $.index), prefix, qlass, false, false));
 
-        sb.push(markup($[0], markEntities + eClass, null, null));
+        sb.push(markup($[0], prefix, eClass, false, false));
 
         s = s.substr($.index + $[0].length);
       }
       else {
-        sb.push(markup(s, qlass, null, null));
+        sb.push(markup(s, prefix, qlass, false, false));
         break;
       }
     }
@@ -246,7 +258,7 @@ function markup(s: string, qlass: string, separateWhitespace: string, markEntiti
     return sb.join('');
   }
 
-  return `<span class="${qlass}">${minimalEscape(s)}</span>`;
+  return `<span class="${prefix}${qlass}">${minimalEscape(s)}</span>`;
 }
 
 function getEntityClass(entity: string, nextChar: string, forAttribValue: boolean): string {

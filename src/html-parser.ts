@@ -457,7 +457,7 @@ export class HtmlParser {
                 this.charset = this.pendingCharset;
               }
               else if (attribLc === 'content') {
-                const charset = (/\bcharset\s*=\s*([\w\-]+)\b/i.exec(value) || [])[1];
+                const charset = (/\bcharset[ \n\r\t\f]*=[ \n\r\t\f]*([\w\-]+)\b/i.exec(value) || [])[1];
 
                 if (this.contentType)
                   this.charset = charset;
@@ -597,7 +597,7 @@ export class HtmlParser {
               this.pendingSource = '';
             }
 
-            const $$ = new RegExp('^<\\/(' + tag + ')(\\s*)>$', 'i').exec(endTag);
+            const $$ = new RegExp('^<\\/(' + tag + ')([ \\n\\r\\t\\f]*)>$', 'i').exec(endTag);
 
             this.pop(tag, `</${$$[1]}${$$[2]}>`);
             this.doEndTagCallback($$[1], $$[2]);

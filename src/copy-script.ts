@@ -6,6 +6,7 @@ const wsReplacements: Record<string, string> = {
   '·': ' ',
   '→\t': '\t',
   '↵\n': '\n',
+  '↧\f': '\f',
   '␍\r': '\r',
   '␍↵\r\n': '\r\n'
 };
@@ -22,11 +23,11 @@ ${restoreWhitespace.toString()}
 `;
 
 export function restoreWhitespaceStrict(s: string) {
-  return s.replace(/\S/g, function(ch) { return ch === '·' ? ' ' : ''; });
+  return s.replace(/[^ \n\r\t\f]/g, function(ch) { return ch === '·' ? ' ' : ''; });
 }
 
 export function restoreWhitespace(s: string) {
-  return s.replace(/·|→\t|↵\n|␍\r|␍↵\r\n|→|↵|␍|�/g, function(ws) {
+  return s.replace(/·|→\t|↵\n|↧\f|␍\r|␍↵\r\n|→|↵|↧|␍|�/g, function(ws) {
     return wsReplacements[ws] || ''; });
 }
 

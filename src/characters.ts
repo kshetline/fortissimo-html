@@ -4,6 +4,10 @@ export function isWhitespace(ch: string): boolean {
   return ch === '\t' || ch === '\n' || ch === '\f' || ch === '\r' || ch === ' ';
 }
 
+export function isOtherWhitespace(ch: string): boolean {
+  return /\xA0|[\u2000-\u200A]|\u202F|\u205F|\u3000/.test(ch);
+}
+
 export function isEol(ch: string): boolean {
   return ch === '\n' || ch === '\r' || ch === '\r\n';
 }
