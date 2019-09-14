@@ -201,35 +201,37 @@ const whitespaces: Record<string, string> = {
   '\r\n': '␍↵\r\n'
 };
 
-function markup(s: string, prefix: string, qlass: string, markWhitespace: boolean, markEntities: boolean): string {
+function markup(s: string, prefix: string, qlass: string, markWhitespace: boolean, markEntities: boolean,
+                checkInvalid = true): string {
   if (!s)
     return '';
-  else if (!markWhitespace && !qlass && !markEntities)
+  else if (!qlass && !markWhitespace && !markEntities && !checkInvalid)
     return minimalEscape(s);
   else if (markWhitespace) {
     return s.split(/([ \n\r\t\f]+)/).map((match, index) => {
       if (index % 2 === 1) {
         match = match.replace(/\r\n|./gs, ch => whitespaces[ch]);
 
-        return markup(match, prefix, 'whitespace', false, false);
+        return markup(match, prefix, 'whitespace', false, false, false);
       }
       else {
-        match = replaceIsolatedSurrogates(match);
-
-        return match.split(/([\x00-\x08\x0B\x0E-\x1F\x7F-\x9F]+)/).map((match2, index2) => {
+        return match.split(/(\xA0|[\u2000-\u200A]|\u202F|\u205F|\u3000)/).map((match2, index2) => {
           if (index2 % 2 === 1)
-            return markup('�'.repeat(match2.length), prefix, 'invalid', false, false);
-          else {
-            return match2.split(/(\xA0|[\u2000-\u200A]|\u202F|\u205F|\u3000)/).map((match3, index3) => {
-              if (index3 % 2 === 1)
-                return markup(match3, prefix, 'bg_whitespace', false, false);
-              else if (qlass || markEntities)
-                return markup(match3, prefix, qlass, false, markEntities);
-              else
-                return minimalEscape(match3);
-            }).join('');
-          }
+            return markup(match2, prefix, 'bg_whitespace', false, false, false);
+          else
+            return markup(match2, prefix, qlass, false, markEntities, checkInvalid);
         }).join('');
+      }
+    }).join('');
+  }
+  else if (checkInvalid) {
+    s = replaceIsolatedSurrogates(s);
+
+    return s.split(/([\x00-\x08\x0B\x0E-\x1F\x7F-\x9F]+)/).map((match, index) => {
+      if (index % 2 === 1)
+        return markup('�'.repeat(match.length), prefix, 'invalid', false, false, false);
+      else {
+        return markup(match, prefix, qlass, false, markEntities, false);
       }
     }).join('');
   }
@@ -243,9 +245,9 @@ function markup(s: string, prefix: string, qlass: string, markWhitespace: boolea
         const eClass = getEntityClass($[0], s.charAt($.index + $[0].length), qlass && qlass.endsWith('value'));
 
         if ($.length > 0)
-          sb.push(markup(s.substr(0, $.index), prefix, qlass, false, false));
+          sb.push(markup(s.substr(0, $.index), prefix, qlass, false, false, false));
 
-        sb.push(markup($[0], prefix, eClass, false, false));
+        sb.push(markup($[0], prefix, eClass, false, false, false));
 
         s = s.substr($.index + $[0].length);
       }
