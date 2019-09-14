@@ -378,13 +378,25 @@ export class HtmlParser {
           }
 
           if (ch !== '>') {
-            if (isAttributeNameChar(ch) || ch === '/') {
+            if (ch === '/' && !this.xmlMode) {
+              // Most browsers seem to simply ignore stray slashes in tags which aren't followed by `>`.
+              // Here will turn it into into its own valueless attribute.
+              this.attribute = '/';
+              this.leadingSpace = this.collectedSpace;
+              this.collectedSpace = '';
+              this.dom.addAttribute('/', '', this.leadingSpace, '', '');
+              this.doAttributeCallback('', '', '');
+              this.state = State.AT_ATTRIBUTE_START;
+            }
+            else if (isAttributeNameChar(ch, !this.xmlMode)) {
               this.leadingSpace = this.collectedSpace;
               this.collectedSpace = '';
               await this.gatherAttributeName(ch);
               this.state = State.AT_ATTRIBUTE_ASSIGNMENT;
             }
             else {
+              this.dom.addInnerWhitespace(this.collectedSpace);
+              this.dom.getCurrentNode().badTerminator = ch;
               this.reportError(`Syntax error in <${this.currentTag}>`);
               break;
             }
@@ -826,7 +838,7 @@ export class HtmlParser {
 
     let ch: string;
 
-    while (isPCENChar(ch = this.getChar() || await this.getNextChunkChar()))
+    while (isPCENChar(ch = this.getChar() || await this.getNextChunkChar(), !this.xmlMode))
       this.currentTag += ch;
 
     this.currentTagLc = this.xmlMode ? this.currentTag : this.currentTag.toLowerCase();
@@ -838,7 +850,7 @@ export class HtmlParser {
 
     let ch: string;
 
-    while (isAttributeNameChar(ch = this.getChar() || await this.getNextChunkChar()))
+    while (isAttributeNameChar(ch = this.getChar() || await this.getNextChunkChar(), !this.xmlMode))
       this.attribute += ch;
 
     this.putBack(ch);

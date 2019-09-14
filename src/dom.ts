@@ -29,19 +29,19 @@ export abstract class DomElement {
     let node = this.parent;
 
     while (node) {
-      ++depth;
+      depth += (node.synthetic && node.parent ? 0 : 1);
       node = node.parent;
     }
 
     return depth;
   }
 
-  get originalDepth(): number {
+  get syntheticDepth(): number {
     let depth = -1;
     let node = this.parent;
 
     while (node) {
-      depth += (node.synthetic && node.parent ? 0 : 1);
+      ++depth;
       node = node.parent;
     }
 
@@ -50,7 +50,7 @@ export abstract class DomElement {
 
   // noinspection JSUnusedGlobalSymbols
   toJSON(): any {
-    return this.toString() + ' (' + this.originalDepth +
+    return this.toString() + ' (' + this.depth +
       (this.line ? `; ${this.line}, ${this.column}` : '') +
       (this.parent ? '; ' + this.parent.tag : '') + ')';
   }
@@ -162,6 +162,7 @@ export class UnmatchedClosingTag extends DomElement {
 
 export class DomNode extends DomElement {
   attributes: string[] = [];
+  badTerminator = '';
   children: DomElement[];
   closureState = ClosureState.UNCLOSED;
   endTagLine = 0;
@@ -245,13 +246,16 @@ export class DomNode extends DomElement {
     if (this.synthetic)
       json.synthetic = true;
 
+    if (this.badTerminator)
+      json.badTerminator = this.badTerminator;
+
     if (this.content)
       json.content = this.content;
 
     json.depth = this.depth;
 
-    if (this.originalDepth !== this.depth)
-      json.originalDepth = this.originalDepth;
+    if (json.depth !== this.syntheticDepth)
+      json.syntheticDepth = this.syntheticDepth;
 
     json.closureState = this.closureState;
 
@@ -286,7 +290,9 @@ export class DomNode extends DomElement {
       if (this.innerWhitespace)
         parts.push(this.innerWhitespace);
 
-      if (this.closureState === ClosureState.SELF_CLOSED)
+      if (this.badTerminator)
+          parts.push(this.badTerminator);
+      else if (this.closureState === ClosureState.SELF_CLOSED)
         parts.push('/>');
       else
         parts.push('>');
@@ -313,6 +319,10 @@ export class DomModel {
 
   getRoot(): DomNode {
     return this.root;
+  }
+
+  getCurrentNode(): DomNode {
+    return this.currentNode;
   }
 
   addAttribute(name: string, value: string, leadingSpace = '', equals = '=', quote = '"'): void {

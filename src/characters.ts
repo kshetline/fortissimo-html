@@ -30,7 +30,9 @@ const PCENCharRanges = new RegExp(
   '\u2C00-\u2FEF\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD]'
 );
 
-export function isPCENChar(ch: string) {
+export function isPCENChar(ch: string, loose = false) {
+  if (loose)
+    return /[^ \n\r\t\f>]/.test(ch);
   if (ch <= 'z')
     return /[-._0-9a-z]/i.test(ch);
   else if (ch.length === 1)
@@ -41,8 +43,11 @@ export function isPCENChar(ch: string) {
   return 0x10000 <= cp && cp <= 0xEFFFF;
 }
 
-export function isAttributeNameChar(ch: string): boolean {
-  return ch > ' ' && !/["`>/=]/.test(ch) && (ch < '0x7F' || ch >= '0xA0');
+export function isAttributeNameChar(ch: string, loose = false): boolean {
+  if (loose)
+    return /[^ \n\r\t\f>=\/]/.test(ch);
+  else
+    return ch > ' ' && !/["`>/=]/.test(ch) && (ch < '0x7F' || ch >= '0xA0');
 }
 
 export function fixBadChars(s: string): string {

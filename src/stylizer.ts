@@ -112,14 +112,15 @@ function stylize(elem: DomElement, options?: HtmlStyleOptions): string {
     return markup(elem.toString(), pf, 'error', ws, false);
   else if (elem instanceof DomNode) {
     const result: string[] = [];
+    const badTerminator = elem.badTerminator;
 
     if (!elem.synthetic) {
-      result.push(markup('<', pf, 'markup', false, false));
-      result.push(markup(elem.tag, pf, 'tag', false, false));
+      result.push(markup('<', pf, badTerminator ? 'error' : 'markup', false, false));
+      result.push(markup(elem.tag, pf, badTerminator ? 'error' : 'tag', false, false));
 
       elem.attributes.forEach((attrib, index) => {
         result.push(markup(elem.spacing[index], pf, null, ws, false));
-        result.push(markup(attrib, pf, 'attrib', false, false));
+        result.push(markup(attrib, pf, attrib === '/' ? 'error' : 'attrib', false, false));
         result.push(markup(elem.equals[index] || '', pf, null, ws, false));
 
         const quote = elem.quotes[index];
@@ -133,7 +134,9 @@ function stylize(elem: DomElement, options?: HtmlStyleOptions): string {
 
       result.push(markup(elem.innerWhitespace, pf, null, ws, false));
 
-      if (elem.closureState === ClosureState.SELF_CLOSED)
+      if (badTerminator)
+        result.push(markup(badTerminator, pf, 'error', false, false));
+      else if (elem.closureState === ClosureState.SELF_CLOSED)
         result.push(markup('/>', pf, 'markup', false, false));
       else
         result.push(markup('>', pf, 'markup', false, false));
@@ -198,7 +201,8 @@ const whitespaces: Record<string, string> = {
   '\n': '↵\n',
   '\f': '↧\f',
   '\r': '␍\r',
-  '\r\n': '␍↵\r\n'
+  '\r\n': '␍↵\r\n',
+  '\xA0': '•'
 };
 
 function markup(s: string, prefix: string, qlass: string, markWhitespace: boolean, markEntities: boolean,
@@ -208,14 +212,14 @@ function markup(s: string, prefix: string, qlass: string, markWhitespace: boolea
   else if (!qlass && !markWhitespace && !markEntities && !checkInvalid)
     return minimalEscape(s);
   else if (markWhitespace) {
-    return s.split(/([ \n\r\t\f]+)/).map((match, index) => {
+    return s.split(/([ \n\r\t\f\xA0]+)/).map((match, index) => {
       if (index % 2 === 1) {
         match = match.replace(/\r\n|./gs, ch => whitespaces[ch]);
 
         return markup(match, prefix, 'whitespace', false, false, false);
       }
       else {
-        return match.split(/(\xA0|[\u2000-\u200A]|\u202F|\u205F|\u3000)/).map((match2, index2) => {
+        return match.split(/([\u2000-\u200A]|\u202F|\u205F|\u3000)/).map((match2, index2) => {
           if (index2 % 2 === 1)
             return markup(match2, prefix, 'bg_whitespace', false, false, false);
           else

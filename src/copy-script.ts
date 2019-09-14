@@ -8,7 +8,8 @@ const wsReplacements: Record<string, string> = {
   '↵\n': '\n',
   '↧\f': '\f',
   '␍\r': '\r',
-  '␍↵\r\n': '\r\n'
+  '␍↵\r\n': '\r\n',
+  '•': '\xA0'
 };
 
 export const copyScriptAsIIFE = `(function() {
@@ -23,11 +24,11 @@ ${restoreWhitespace.toString()}
 `;
 
 export function restoreWhitespaceStrict(s: string) {
-  return s.replace(/[^ \n\r\t\f]/g, function(ch) { return ch === '·' ? ' ' : ''; });
+  return s.replace(/[^ \n\r\t\f\xA0]/g, function(ch) { return ch === '·' ? ' ' : ch === '•' ? '\xA0' : ''; });
 }
 
 export function restoreWhitespace(s: string) {
-  return s.replace(/·|→\t|↵\n|↧\f|␍\r|␍↵\r\n|→|↵|↧|␍|�/g, function(ws) {
+  return s.replace(/·|→\t|↵\n|↧\f|␍\r|␍↵\r\n|•|→|↵|↧|␍|�/g, function(ws) {
     return wsReplacements[ws] || ''; });
 }
 
