@@ -363,7 +363,7 @@ export class HtmlParser {
               ++this.parseResults.errors;
               this.callback('error', 'Syntax error in end tag', this.line, this.column, '');
               this.pendingSource = this.collectedSpace + ch;
-              this.gatherInvalidEndTagEnding(ch);
+              this.gatherInvalidEndTagEnding();
               this.pop(this.currentTagLc, `</${this.currentTag}${this.pendingSource}`);
               this.doEndTagCallback(this.currentTag, this.pendingSource);
             }
@@ -855,8 +855,10 @@ export class HtmlParser {
     this.putBack(ch);
   }
 
-  private async gatherInvalidEndTagEnding(ch: string): Promise<void> {
-    while ((ch = this.getChar() || await this.getNextChunkChar()) && ch !== '>');
+  private async gatherInvalidEndTagEnding(): Promise<void> {
+    let ch: string;
+
+    while ((ch = this.getChar() || await this.getNextChunkChar()) && ch !== '>') {}
   }
 
   private async gatherAttributeName(init = ''): Promise<void> {
