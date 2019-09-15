@@ -1,4 +1,25 @@
-import * as entities from './entities.json';
+import * as entitiesAsJson from './entities.json';
+
+let entities: Record<string, string> = entitiesAsJson;
+
+if (entities.default)
+  entities = entities.default as any as Record<string, string>;
+
+const codePointToEntity: Record<number, string> = {};
+const pairsToEntity: Record<string, string> = {};
+
+Object.keys(entities).forEach(entity => {
+  const value = entities[entity];
+  const cp = value.codePointAt(0);
+
+  if (cp < 0x10000 && value.length === 1 || cp >= 0x10000 && value.length === 2) {
+    // Where multiple names exist for the same codepoint, first one found takes priority.
+    if (!(cp in codePointToEntity))
+      codePointToEntity[cp] = '&' + entity + ';';
+  }
+  else if (value.length === 2 || !(value in pairsToEntity))
+    pairsToEntity[value] = '&' + entity + ';';
+});
 
 export function isWhitespace(ch: string): boolean {
   return ch === '\t' || ch === '\n' || ch === '\f' || ch === '\r' || ch === ' ';
@@ -59,37 +80,30 @@ export function isAttributeNameChar(ch: string, loose = false): boolean {
     return ch > ' ' && !/["`>/=]/.test(ch) && (ch < '0x7F' || ch >= '0xA0');
 }
 
-export function fixBadChars(s: string): string {
-  s = s.replace(/</g, '&lt;');
-  s = s.replace(/>/g, '&gt;');
-
-  const parts = s.split('&');
-
-  if (parts.length > 1) {
-    s = parts.map((part, index) => {
-      if (index > 0) {
-        const $ = /^([a-z]+|#\d+|#x[0-9a-f]+)(;?)/i.exec(part);
-
-        if (!$)
-          part = 'amp;' + part;
-        else if (!$[2])
-          part = $[1] + ';' + part.substr($[1].length);
-      }
-
-      return part;
-    }).join('&');
-  }
-
-  return s;
-}
-
 const basicEntities: Record<string, string> = {'<': '&lt;', '>': '&gt;', '&': '&amp;'};
 
 export function minimalEscape(s: string): string {
   return s.replace(/[<>&]/g, match => basicEntities[match]);
 }
 
-export function isKnownEntity(entity: string): boolean {
+export function unescapeEntities(s: string, forAttributeValue = false): string {
+  const sb: string[] = [];
+
+  separateEntities(s).forEach((value, index) => {
+    if (index % 2 === 0 || forAttributeValue && !value.endsWith(';'))
+      sb.push(value);
+    else
+      sb.push(resolveEntity(value));
+  });
+
+  return sb.join('');
+}
+
+export function separateEntities(s: string): string[] {
+  return s ? s.split(/(&(?:amp(?:;?)|#\d+(?:;|\b|(?=\D))|#x[0-9a-f]+(?:;|\b|(?=[^0-9a-f]))|[0-9a-z]+(?:;|\b|(?=[^0-9a-z]))))/i) : [s];
+}
+
+export function isKnownNamedEntity(entity: string): boolean {
   if (entity.startsWith('&'))
     entity = entity.substr(1);
 
@@ -97,6 +111,32 @@ export function isKnownEntity(entity: string): boolean {
     entity = entity.substr(0, entity.length - 1);
 
   return entity in entities;
+}
+
+export function resolveEntity(entity: string): string {
+  if (entity.startsWith('&'))
+    entity = entity.substr(1);
+
+  if (entity.endsWith(';'))
+    entity = entity.substr(0, entity.length - 1);
+
+  if (entity.startsWith('#')) {
+    let cp: number;
+
+    entity = entity.substr(1);
+
+    if (entity.startsWith('x') || entity.startsWith('X'))
+      cp = parseInt(entity.substr(1), 16);
+    else
+      cp = parseInt(entity, 10);
+
+    if (isNaN(cp) || cp > 0x10FFFF || (0xD800 <= cp && cp <= 0xDFFF))
+      return '�';
+    else
+      return String.fromCodePoint(cp);
+  }
+
+  return entities[entity] || '�';
 }
 
 export function codepointLength(s: string): number {

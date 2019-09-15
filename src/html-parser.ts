@@ -1,12 +1,12 @@
 import { processMillis } from './util';
 import { VOID_ELEMENTS } from './elements';
-import { fixBadChars, isAttributeNameChar, isEol, isMarkupStart, isPCENChar, isWhitespace } from './characters';
+import { isAttributeNameChar, isEol, isMarkupStart, isPCENChar, isWhitespace } from './characters';
 import { CData, CommentElement, DeclarationElement, DocType, DomModel, DomNode, ProcessingElement,
   TextElement } from './dom';
 
 export interface HtmlParserOptions {
   eol?: string | boolean;
-  fixBadChars?: boolean;
+  xmlMode?: boolean;
 }
 
 export class ParseResults {
@@ -42,7 +42,7 @@ const TEXT_STARTERS = new Set<State>([State.OUTSIDE_MARKUP, State.IN_SCRIPT_ELEM
 
 const DEFAULT_OPTIONS: HtmlParserOptions = {
   eol: '\n',
-  fixBadChars: false,
+  xmlMode: false,
 };
 
 const DEFAULT_YIELD_TIME = 50;
@@ -61,9 +61,10 @@ type EncodingCallback = (encoding: string, normalizedEncoding?: string, explicit
 type EndTagCallback = (depth: number, tag: string, innerWhitespace: string) => void;
 type ErrorCallback = (error: string, line?: number, column?: number, source?: string) => void;
 type StartTagEndCallback = (depth: number, innerWhitespace: string, end: string) => void;
+type TextCallback = (depth: number, text: string, shouldResolveEntities: boolean) => void;
 
 type ParserCallback = AttributeCallback | BasicCallback | CompletionCallback | DocTypeCallback | EncodingCallback |
-                      EndTagCallback | ErrorCallback | StartTagEndCallback;
+                      EndTagCallback | ErrorCallback | StartTagEndCallback | TextCallback;
 
 type EventType = 'attribute' | 'cdata' | 'comment' | 'completion' | 'declaration' | 'doctype' | 'encoding' |
                  'end-tag' | 'error' | 'generic' | 'processing' | 'request-data' | 'start-tag-end' |
@@ -114,10 +115,11 @@ export class HtmlParser {
     this.options = {};
     Object.assign(this.options, options);
     this.adjustOptions();
+    this.xmlMode = this.options.xmlMode;
   }
 
   on(event: 'attribute', callback: AttributeCallback): HtmlParser;
-  on(event: 'cdata' | 'comment' | 'declaration' | 'generic' | 'processing' | 'start-tag-start' | 'text',
+  on(event: 'cdata' | 'comment' | 'declaration' | 'generic' | 'processing' | 'start-tag-start',
      callback: BasicCallback): HtmlParser;
   on(event: 'completion', callback: CompletionCallback): HtmlParser;
   on(event: 'doctype', callback: DocTypeCallback): HtmlParser;
@@ -126,6 +128,7 @@ export class HtmlParser {
   on(event: 'error', callback: ErrorCallback): HtmlParser;
   on(event: 'request-data', callback: () => void): HtmlParser;
   on(event: 'start-tag-end', callback: StartTagEndCallback): HtmlParser;
+  on(event: 'text', callback: TextCallback): HtmlParser;
 
   on(event: EventType, callback: ParserCallback): HtmlParser {
     if (!callback)
@@ -203,7 +206,7 @@ export class HtmlParser {
     this.sourceIndex = 0;
     this.stopped = false;
     this.state = State.OUTSIDE_MARKUP;
-    this.xmlMode = false;
+    this.xmlMode = this.options.xmlMode;
 
     if (this.resolveNextChunk) {
       this.resolveNextChunk('');
@@ -302,7 +305,7 @@ export class HtmlParser {
           if (text) {
             this.dom.addChild(new TextElement(text, this.textLine, this.textColumn));
             this.pendingSource = '<';
-            this.callback('text', this.dom.getDepth() + 1, text);
+            this.callback('text', this.dom.getDepth() + 1, text, true);
           }
 
           this.collectedSpace = '';
@@ -613,7 +616,7 @@ export class HtmlParser {
               content = this.collectedSpace + content;
               this.dom.addChild(new TextElement(content, this.textLine, this.textColumn));
 
-              this.callback('text', this.dom.getDepth() + 1, content);
+              this.callback('text', this.dom.getDepth() + 1, content, tag === 'textarea');
 
               this.collectedSpace = '';
               this.pendingSource = '';
@@ -836,9 +839,6 @@ export class HtmlParser {
           mightNeedRepair = true;
       }
     }
-
-    if (mightNeedRepair && this.options.fixBadChars)
-      text = fixBadChars(text);
 
     return text;
   }

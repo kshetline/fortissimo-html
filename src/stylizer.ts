@@ -1,7 +1,7 @@
 import { copyScriptAsIIFE } from './copy-script';
 import { ClosureState, CData, CommentElement, DeclarationElement, DocType, DomElement, DomNode, ProcessingElement,
   TextElement, UnmatchedClosingTag } from './dom';
-import { isAllPCENChar, isKnownEntity, isValidEntityCodepoint, minimalEscape, replaceIsolatedSurrogates } from './characters';
+import { isAllPCENChar, isKnownNamedEntity, isValidEntityCodepoint, minimalEscape, replaceIsolatedSurrogates, separateEntities } from './characters';
 import { NO_ENTITIES_ELEMENTS } from './elements';
 
 type HtmlColor = 'attrib' | 'background' | 'bg_whitespace' | 'comment' | 'entity' | 'error' | 'foreground' |
@@ -243,24 +243,14 @@ function markup(s: string, prefix: string, qlass: string, markWhitespace: boolea
   else if (markEntities) {
     const sb: string[] = [];
 
-    while (s) {
-      const $ = /(?:&(?:amp(?:;?)|#\d+(?:;|\b|(?=\D))|#x[0-9a-f]+(?:;|\b|(?=[^0-9a-f]))|[0-9a-z]+(?:;|\b|(?=[^0-9a-z]))))/i.exec(s);
-
-      if ($) {
-        const eClass = getEntityClass($[0], s.charAt($.index + $[0].length), qlass && qlass.endsWith('value'));
-
-        if ($.length > 0)
-          sb.push(markup(s.substr(0, $.index), prefix, qlass, false, false, false));
-
-        sb.push(markup($[0], prefix, eClass, false, false, false));
-
-        s = s.substr($.index + $[0].length);
-      }
+    separateEntities(s).forEach((part, index) => {
+      if (index % 2 === 0)
+        sb.push(markup(part, prefix, qlass, false, false, false));
       else {
-        sb.push(markup(s, prefix, qlass, false, false));
-        break;
+        const eClass = getEntityClass(part, qlass && qlass.endsWith('value'));
+        sb.push(markup(part, prefix, eClass, false, false, false));
       }
-    }
+    });
 
     return sb.join('');
   }
@@ -268,24 +258,27 @@ function markup(s: string, prefix: string, qlass: string, markWhitespace: boolea
   return `<span class="${prefix}${qlass}">${minimalEscape(s)}</span>`;
 }
 
-function getEntityClass(entity: string, nextChar: string, forAttribValue: boolean): string {
+function getEntityClass(entity: string, forAttribValue: boolean): string {
+  let bestCase = 'entity';
+
   entity = entity.substr(1);
 
-  if (entity.endsWith(';')) {
-    let cp: number;
-
+  if (!entity.endsWith(';')) {
+    if (forAttribValue)
+      return 'value';
+    else
+      bestCase = 'warning';
+  }
+  else
     entity = entity.substr(0, entity.length - 1);
 
-    if (entity.toLowerCase().startsWith('#x'))
-      return isNaN(cp = parseInt(entity.substr(2), 16)) || !isValidEntityCodepoint(cp) ? 'error' : 'entity';
+  let cp: number;
 
-    if (entity.toLowerCase().startsWith('#'))
-      return isNaN(cp = parseInt(entity.substr(1), 10)) || !isValidEntityCodepoint(cp) ? 'error' : 'entity';
+  if (entity.toLowerCase().startsWith('#x'))
+    return isNaN(cp = parseInt(entity.substr(2), 16)) || !isValidEntityCodepoint(cp) ? 'error' : bestCase;
 
-    return isKnownEntity(entity) ? 'entity' : 'warning';
-  }
-  else if (forAttribValue)
-    return 'value';
-  else
-    return 'warning';
+  if (entity.toLowerCase().startsWith('#'))
+    return isNaN(cp = parseInt(entity.substr(1), 10)) || !isValidEntityCodepoint(cp) ? 'error' : bestCase;
+
+  return isKnownNamedEntity(entity) ? 'entity' : 'warning';
 }
