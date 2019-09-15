@@ -43,6 +43,15 @@ export function isPCENChar(ch: string, loose = false) {
   return 0x10000 <= cp && cp <= 0xEFFFF;
 }
 
+export function isAllPCENChar(s: string): boolean {
+  for (let i = 0; i < s.length; ++i) {
+    if (!isPCENChar(s.charAt(i)))
+      return false;
+  }
+
+  return true;
+}
+
 export function isAttributeNameChar(ch: string, loose = false): boolean {
   if (loose)
     return /[^ \n\r\t\f>=\/]/.test(ch);

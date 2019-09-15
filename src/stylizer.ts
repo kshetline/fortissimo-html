@@ -1,7 +1,7 @@
 import { copyScriptAsIIFE } from './copy-script';
 import { ClosureState, CData, CommentElement, DeclarationElement, DocType, DomElement, DomNode, ProcessingElement,
   TextElement, UnmatchedClosingTag } from './dom';
-import { isKnownEntity, isValidEntityCodepoint, minimalEscape, replaceIsolatedSurrogates } from './characters';
+import { isAllPCENChar, isKnownEntity, isValidEntityCodepoint, minimalEscape, replaceIsolatedSurrogates } from './characters';
 import { NO_ENTITIES_ELEMENTS } from './elements';
 
 type HtmlColor = 'attrib' | 'background' | 'bg_whitespace' | 'comment' | 'entity' | 'error' | 'foreground' |
@@ -116,7 +116,8 @@ function stylize(elem: DomElement, options?: HtmlStyleOptions): string {
 
     if (!elem.synthetic) {
       result.push(markup('<', pf, badTerminator ? 'error' : 'markup', false, false));
-      result.push(markup(elem.tag, pf, badTerminator ? 'error' : 'tag', false, false));
+      result.push(markup(elem.tag, pf, badTerminator ? 'error' :
+        isAllPCENChar(elem.tag) ? 'tag' : 'warning', false, false));
 
       elem.attributes.forEach((attrib, index) => {
         result.push(markup(elem.spacing[index], pf, null, ws, false));

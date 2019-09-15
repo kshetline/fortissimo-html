@@ -60,9 +60,9 @@ async function processFile(file: string): Promise<void> {
           logProgress('CDATA:', '<![CDATA[' + cdata + ']]>' + ' (' + depth + ')');
           rebuilt += '<![CDATA[' + cdata + ']]>';
         })
-        .on('end-tag', (depth, tag, innerWhitespace: string) => {
-          logProgress('end:', '</' + tag + innerWhitespace + '>' + ' (' + depth + ')');
-          rebuilt += '</' + tag + innerWhitespace + '>';
+        .on('end-tag', (depth, tag, trailingContent: string) => {
+          logProgress('end:', '</' + tag + trailingContent + ' (' + depth + ')');
+          rebuilt += '</' + tag + trailingContent;
         })
         .on('comment', (depth, comment) => {
           logProgress('comment:', comment + ' (' + depth + ')');

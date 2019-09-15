@@ -353,14 +353,24 @@ export class HtmlParser {
 
         case State.IN_END_TAG:
           if (ch !== '>') {
-            this.putBack(ch);
-            this.pop(this.currentTagLc, this.pendingSource);
-            this.reportError('Syntax error in end tag');
-            break;
+            if (this.xmlMode) {
+              this.putBack(ch);
+              this.pop(this.currentTagLc, this.pendingSource);
+              this.reportError('Syntax error in end tag');
+              break;
+            }
+            else {
+              ++this.parseResults.errors;
+              this.callback('error', 'Syntax error in end tag', this.line, this.column, '');
+              this.pendingSource = this.collectedSpace + ch;
+              this.gatherInvalidEndTagEnding(ch);
+              this.pop(this.currentTagLc, `</${this.currentTag}${this.pendingSource}`);
+              this.doEndTagCallback(this.currentTag, this.pendingSource);
+            }
           }
           else {
             this.pop(this.currentTagLc, `</${this.currentTag}${this.collectedSpace}>`);
-            this.doEndTagCallback(this.currentTag, this.collectedSpace);
+            this.doEndTagCallback(this.currentTag, this.collectedSpace + '>');
           }
         break;
 
@@ -612,7 +622,7 @@ export class HtmlParser {
             const $$ = new RegExp('^<\\/(' + tag + ')([ \\n\\r\\t\\f]*)>$', 'i').exec(endTag);
 
             this.pop(tag, `</${$$[1]}${$$[2]}>`);
-            this.doEndTagCallback($$[1], $$[2]);
+            this.doEndTagCallback($$[1], $$[2] + '>');
             this.state = State.OUTSIDE_MARKUP;
           }
         break;
@@ -656,8 +666,8 @@ export class HtmlParser {
     this.pendingSource = '';
   }
 
-  private doEndTagCallback(tag: string, innerWhitespace: string) {
-    this.callback('end-tag', this.dom.getDepth() + 1, tag, innerWhitespace);
+  private doEndTagCallback(tag: string, trailingContent: string) {
+    this.callback('end-tag', this.dom.getDepth() + 1, tag, trailingContent);
     this.state = State.OUTSIDE_MARKUP;
     this.collectedSpace = '';
     this.pendingSource = '';
@@ -843,6 +853,10 @@ export class HtmlParser {
 
     this.currentTagLc = this.xmlMode ? this.currentTag : this.currentTag.toLowerCase();
     this.putBack(ch);
+  }
+
+  private async gatherInvalidEndTagEnding(ch: string): Promise<void> {
+    while ((ch = this.getChar() || await this.getNextChunkChar()) && ch !== '>');
   }
 
   private async gatherAttributeName(init = ''): Promise<void> {
