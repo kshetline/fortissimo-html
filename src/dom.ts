@@ -136,7 +136,8 @@ export class TextElement extends DomElement {
   constructor(
     content: string,
     line: number,
-    column: number
+    column: number,
+    public possibleEntities: boolean
   ) {
     super(content, line, column);
   }

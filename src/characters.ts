@@ -1,5 +1,26 @@
 import * as entitiesAsJson from './entities.json';
 
+export enum EntityStyle { DECIMAL, HEX, NUMERIC_SHORTEST, NAMED_OR_DECIMAL, NAMED_OR_HEX, NAMED_OR_SHORTEST, SHORTEST}
+const ES = EntityStyle;
+
+export enum ReencodeOptions { DONT_CHANGE, REPAIR_ONLY, LOOSE_MINIMAL, MINIMAL, NAMED_ENTITIES }
+const RO = ReencodeOptions;
+
+export enum TargetEncoding { SEVEN_BIT, EIGHT_BIT, UNICODE }
+const TE = TargetEncoding;
+
+export interface EscapeOptions {
+  entityStyle?: EntityStyle;
+  reencode?: ReencodeOptions;
+  target?: TargetEncoding;
+}
+
+const DEFAULT_ESCAPE_OPTIONS: EscapeOptions = {
+  entityStyle: EntityStyle.SHORTEST,
+  reencode: ReencodeOptions.MINIMAL,
+  target: TargetEncoding.UNICODE
+};
+
 let entities: Record<string, string> = entitiesAsJson;
 
 if (entities.default)
@@ -13,9 +34,11 @@ Object.keys(entities).forEach(entity => {
   const cp = value.codePointAt(0);
 
   if (cp < 0x10000 && value.length === 1 || cp >= 0x10000 && value.length === 2) {
-    // Where multiple names exist for the same codepoint, first one found takes priority.
-    if (!(cp in codePointToEntity))
-      codePointToEntity[cp] = '&' + entity + ';';
+    const oldValue = codePointToEntity[cp];
+    const newValue = '&' + entity + ';';
+
+    if (!oldValue || newValue.length < oldValue.length || oldValue.charAt(1) < 'a' && newValue.charAt(1) >= 'a')
+      codePointToEntity[cp] = newValue;
   }
   else if (value.length === 2 || !(value in pairsToEntity))
     pairsToEntity[value] = '&' + entity + ';';
@@ -86,6 +109,77 @@ export function minimalEscape(s: string): string {
   return s.replace(/[<>&]/g, match => basicEntities[match]);
 }
 
+export function escapeToEntities(s: string, options?: EscapeOptions): string {
+  options = Object.assign(Object.assign({}, DEFAULT_ESCAPE_OPTIONS), options || {});
+
+  const sb: string[] = [];
+  const style = options.entityStyle;
+  const highest = (options.target === TE.SEVEN_BIT ? 0x7E : options.target === TE.EIGHT_BIT ? 0xFF : 0x10FFFF);
+
+  for (let i = 0; i < s.length; ++i) {
+    let ch = s.charAt(i);
+    const cp = s.codePointAt(i);
+    let pairMatch: string;
+    let named: string;
+    let numeric: string;
+
+    if (cp > 0xFFFF) {
+      ch = s.substr(i, 2);
+      ++i;
+    }
+
+    const nextCh = s.charAt(i + 1) || '';
+    const entityNeeded = (
+      cp < 32 && !isWhitespace(ch) ||
+      0x7F <= cp && cp <= 0x9F ||
+      cp > highest ||
+      options.reencode >= RO.MINIMAL && /[<>&]/.test(ch) ||
+      options.reencode === RO.LOOSE_MINIMAL && (ch === '<' && (!nextCh || isMarkupStart(nextCh)) ||
+                                                ch === '&' && nextCh && /[a-z0-9#]/i.test(nextCh)));
+
+    if ((entityNeeded || options.reencode === RO.NAMED_ENTITIES) &&
+        cp <= 0xFFFF && nextCh && style >= ES.NAMED_OR_DECIMAL)
+      named = pairMatch = pairsToEntity[s.substr(i, 2)];
+
+    if (entityNeeded && !named && options.reencode === RO.NAMED_ENTITIES)
+      named = codePointToEntity[cp];
+
+    if (!entityNeeded && named) {
+      sb.push(named);
+
+      if (pairMatch)
+        ++i;
+
+      continue;
+    }
+
+    if ((entityNeeded || (options.reencode === RO.NAMED_ENTITIES && cp >= highest)) && !named && style >= ES.NAMED_OR_DECIMAL)
+      named = codePointToEntity[cp];
+
+    if (entityNeeded) {
+      if (style === ES.DECIMAL || style === ES.NAMED_OR_DECIMAL ||
+          (style  === ES.NUMERIC_SHORTEST || (!named && style === ES.NAMED_OR_SHORTEST) || style === ES.SHORTEST) && cp <= 9999)
+        numeric = '&#' + cp + ';';
+      else if (style === ES.HEX || style === ES.NAMED_OR_HEX ||
+          (style  === ES.NUMERIC_SHORTEST || (!named && style === ES.NAMED_OR_SHORTEST) || style === ES.SHORTEST) && cp > 9999)
+        numeric = '&#x' + cp.toString(16).toUpperCase() + ';';
+    }
+
+    if (!numeric && named || numeric && named && named.length <= numeric.length) {
+      sb.push(named);
+
+      if (pairMatch)
+        ++i;
+    }
+    else if (numeric)
+      sb.push(numeric);
+    else
+      sb.push(ch);
+  }
+
+  return sb.join('');
+}
+
 export function unescapeEntities(s: string, forAttributeValue = false): string {
   const sb: string[] = [];
 
@@ -114,11 +208,18 @@ export function isKnownNamedEntity(entity: string): boolean {
 }
 
 export function resolveEntity(entity: string): string {
-  if (entity.startsWith('&'))
-    entity = entity.substr(1);
+  const original = entity;
+  let ambiguous = false;
 
   if (entity.endsWith(';'))
     entity = entity.substr(0, entity.length - 1);
+  else
+    ambiguous = true;
+
+  if (entity.startsWith('&'))
+    entity = entity.substr(1);
+  else
+    ambiguous = false;
 
   if (entity.startsWith('#')) {
     let cp: number;
@@ -136,7 +237,7 @@ export function resolveEntity(entity: string): string {
       return String.fromCodePoint(cp);
   }
 
-  return entities[entity] || '�';
+  return entities[entity] || (ambiguous ? original : '�');
 }
 
 export function codepointLength(s: string): number {

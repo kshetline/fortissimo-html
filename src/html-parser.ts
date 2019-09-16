@@ -61,7 +61,7 @@ type EncodingCallback = (encoding: string, normalizedEncoding?: string, explicit
 type EndTagCallback = (depth: number, tag: string, innerWhitespace: string) => void;
 type ErrorCallback = (error: string, line?: number, column?: number, source?: string) => void;
 type StartTagEndCallback = (depth: number, innerWhitespace: string, end: string) => void;
-type TextCallback = (depth: number, text: string, shouldResolveEntities: boolean) => void;
+type TextCallback = (depth: number, text: string, possibleEntities: boolean) => void;
 
 type ParserCallback = AttributeCallback | BasicCallback | CompletionCallback | DocTypeCallback | EncodingCallback |
                       EndTagCallback | ErrorCallback | StartTagEndCallback | TextCallback;
@@ -303,7 +303,7 @@ export class HtmlParser {
           const text = this.collectedSpace + await this.gatherText();
 
           if (text) {
-            this.dom.addChild(new TextElement(text, this.textLine, this.textColumn));
+            this.dom.addChild(new TextElement(text, this.textLine, this.textColumn, true));
             this.pendingSource = '<';
             this.callback('text', this.dom.getDepth() + 1, text, true);
           }
@@ -614,7 +614,7 @@ export class HtmlParser {
           else {
             if (content || this.collectedSpace) {
               content = this.collectedSpace + content;
-              this.dom.addChild(new TextElement(content, this.textLine, this.textColumn));
+              this.dom.addChild(new TextElement(content, this.textLine, this.textColumn, tag === 'textarea'));
 
               this.callback('text', this.dom.getDepth() + 1, content, tag === 'textarea');
 
@@ -639,7 +639,7 @@ export class HtmlParser {
       this.callback('error', 'Unexpected end of file', this.line, this.column);
 
     if (this.collectedSpace) {
-      this.dom.addChild(new TextElement(this.collectedSpace, this.textLine, this.textColumn));
+      this.dom.addChild(new TextElement(this.collectedSpace, this.textLine, this.textColumn, true));
       this.callback('text', this.dom.getDepth() + 1, this.collectedSpace);
     }
 

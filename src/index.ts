@@ -122,7 +122,7 @@ async function processFile(file: string): Promise<void> {
           logProgress('tag:', tag + ' (' + depth + ')');
           rebuilt += '<' + tag;
         })
-        .on('text', (depth, text /* , shouldResolveEntities */) => {
+        .on('text', (depth, text /* , possibleEntities */) => {
           logProgress('text:', text + ' (' + depth + ')');
           rebuilt += text;
         })
