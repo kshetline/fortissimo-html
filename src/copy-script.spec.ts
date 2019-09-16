@@ -61,13 +61,17 @@ const fakeDocument = {
                 {
                   classList: new FakeClassList([]),
                   nodeValue: 'bar'
-                }
+                },
+                {
+                  classList: new FakeClassList(['xxx-invalid']),
+                  innerText: '���'
+                },
               ]
             };
           }
         };
       },
-      toString: function () { return '·•↵foobar'; }
+      toString: function () { return '·•↵foobar���'; }
     };
   }
 };
