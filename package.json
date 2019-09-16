@@ -6,7 +6,7 @@
   "scripts": {
     "start": "tsc && node dist/index.js",
     "test": "mocha --require ts-node/register -w --watch-extensions ts src/**/*.spec.ts",
-    "test-once": "nyc mocha --require ts-node/register src/**/*.spec.ts",
+    "test-once": "nyc --reporter=html mocha --require ts-node/register src/**/*.spec.ts",
     "test-debug": "nyc mocha --timeout 600000 --require ts-node/register src/**/*.spec.ts"
   },
   "nyc": {
@@ -15,7 +15,8 @@
       ".tsx"
     ],
     "exclude": [
-      "**/*.d.ts"
+      "**/*.d.ts",
+      "**/*.spec.ts"
     ],
     "reporter": [
       "html"

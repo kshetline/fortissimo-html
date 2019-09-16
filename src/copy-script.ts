@@ -23,11 +23,11 @@ ${restoreWhitespace.toString()}
 })();
 `;
 
-export function restoreWhitespaceStrict(s: string) {
+function restoreWhitespaceStrict(s: string) {
   return s.replace(/[^ \n\r\t\f\xA0]/g, function(ch) { return ch === '·' ? ' ' : ch === '•' ? '\xA0' : ''; });
 }
 
-export function restoreWhitespace(s: string) {
+function restoreWhitespace(s: string) {
   return s.replace(/·|→\t|↵\n|↧\f|␍\r|␍↵\r\n|•|→|↵|↧|␍|�/g, function(ws) {
     return wsReplacements[ws] || ''; });
 }
