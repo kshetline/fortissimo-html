@@ -162,7 +162,7 @@ export class HtmlParser {
       case 'cdata':           return cb(args[0], '<![CDATA[' + args[1] + ']]>');
       case 'comment':         return cb(args[0], '<!--' + args[1] + '-->');
       case 'declaration':     return cb(args[0], '<!' + args[1] + '>');
-      case 'end-tag':         return cb(args[0], '</' + args[1] + args[2] + '>');
+      case 'end-tag':         return cb(args[0], '</' + args[1] + args[2]);
       case 'processing':      return cb(args[0], '<?' + args[1] + '>');
       case 'start-tag-end':   return cb(args[0], args[1] + args[2]);
       case 'start-tag-start': return cb(args[0], '<' + args[1]);
