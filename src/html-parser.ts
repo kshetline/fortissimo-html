@@ -1,4 +1,4 @@
-import { processMillis } from './util';
+import { processMillis } from './platform-specifics';
 import { VOID_ELEMENTS } from './elements';
 import { isAttributeNameChar, isEol, isMarkupStart, isPCENChar, isWhitespace } from './characters';
 import { CData, CommentElement, DeclarationElement, DocType, DomModel, DomNode, ProcessingElement,
@@ -98,6 +98,7 @@ export class HtmlParser {
   private parserRunning = false;
   private pendingCharset = '';
   private pendingSource = '';
+  private pendingReset = false;
   private preEqualsSpace = '';
   private putBacks: string[] = [];
   private resolveNextChunk: (gotMoreChars: string) => void;
@@ -195,12 +196,13 @@ export class HtmlParser {
     this.htmlSource = '';
     this.htmlSourceIsFinal = false;
     this.leadingSpace = '';
-    this.line  = 1;
+    this.line = 1;
     this.nextChunk = '';
     this.nextChunkIsFinal = false;
     this.parseResults = undefined;
     this.parserRunning = false;
     this.pendingCharset = '';
+    this.pendingReset = false;
     this.pendingSource = '';
     this.putBacks = [];
     this.sourceIndex = 0;
@@ -257,7 +259,12 @@ export class HtmlParser {
 
     return new Promise<ParseResults>(resolve => {
       this.yieldTime = yieldTime;
-      this.parsingResolver = resolve;
+      this.parsingResolver = results => {
+        if (this.pendingReset)
+          this.reset();
+
+        resolve(results);
+      };
 
       const parse = () => {
         this.parseLoop().then(() => {
@@ -495,8 +502,8 @@ export class HtmlParser {
 
                 if (bailout) {
                   this.parserRunning = false;
+                  this.pendingReset = true;
                   this.parsingResolver(null);
-                  setTimeout(() => this.reset());
 
                   return;
                 }

@@ -5,23 +5,35 @@
   "main": "dist/index.js",
   "scripts": {
     "start": "tsc && node dist/index.js",
-    "test": "mocha --require ts-node/register -w --watch-extensions ts src/**/*.spec.ts",
-    "test-once": "nyc --reporter=html mocha --require ts-node/register src/**/*.spec.ts",
-    "test-debug": "nyc mocha --timeout 600000 --require ts-node/register src/**/*.spec.ts"
+    "test": "nyc mocha --require ts-node/register src/**/*.spec.ts",
+    "test-dev": "mocha --require ts-node/register -w --watch-extensions ts src/**/*.spec.ts",
+    "test-debug": "nyc mocha --timeout 1800000 --require ts-node/register src/**/*.spec.ts"
   },
   "nyc": {
     "extension": [
-      ".ts",
-      ".tsx"
+      ".ts"
+    ],
+    "include": [
+      "src/**/*.ts"
     ],
     "exclude": [
       "**/*.d.ts",
       "**/*.spec.ts",
-      "src/index.ts"
+      "src/index.ts",
+      "src/platform-specifics.ts"
     ],
     "reporter": [
-      "html"
+      "html",
+      "text-summary"
     ],
+    "require": [
+      "ts-node/register"
+    ],
+    "source-map": true,
+    "produce-source-map": true,
+    "instrument": true,
+    "check-coverage": false,
+    "cache": true,
     "all": true
   },
   "keywords": [

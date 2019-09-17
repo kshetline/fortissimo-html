@@ -10,7 +10,9 @@
     "moduleResolution": "node",
     "esModuleInterop": true,
     "declaration": true,
+    "declarationMap": true,
     "sourceMap": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true
   }
 }
