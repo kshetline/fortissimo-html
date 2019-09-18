@@ -40,7 +40,7 @@ Object.keys(entities).forEach(entity => {
     if (!oldValue || newValue.length < oldValue.length || oldValue.charAt(1) < 'a' && newValue.charAt(1) >= 'a')
       codePointToEntity[cp] = newValue;
   }
-  else if (value.length === 2 || !(value in pairsToEntity))
+  else if (value.length === 2)
     pairsToEntity[value] = '&' + entity + ';';
 });
 
@@ -74,10 +74,11 @@ const PCENCharRanges = new RegExp(
   '\u2C00-\u2FEF\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD]'
 );
 
+// PCEN: Potential Custom Element Name
 export function isPCENChar(ch: string, loose = false) {
   if (loose)
     return /[^ \n\r\t\f>]/.test(ch);
-  if (ch <= 'z')
+  else if (ch <= 'z')
     return /[-._0-9a-z]/i.test(ch);
   else if (ch.length === 1)
     return PCENCharRanges.test(ch);
@@ -89,7 +90,12 @@ export function isPCENChar(ch: string, loose = false) {
 
 export function isAllPCENChar(s: string): boolean {
   for (let i = 0; i < s.length; ++i) {
-    if (!isPCENChar(s.charAt(i)))
+    let ch = s.charAt(i);
+
+    if (s.codePointAt(i) > 0xFFFF)
+      ch += s.charAt(++i);
+
+    if (!isPCENChar(ch))
       return false;
   }
 
@@ -156,7 +162,7 @@ export function escapeToEntities(s: string, options?: EscapeOptions): string {
     if ((entityNeeded || (options.reencode === RO.NAMED_ENTITIES && cp >= highest)) && !named && style >= ES.NAMED_OR_DECIMAL)
       named = codePointToEntity[cp];
 
-    if (entityNeeded) {
+    if (entityNeeded && (!named || style >= ES.NAMED_OR_SHORTEST)) {
       if (style === ES.DECIMAL || style === ES.NAMED_OR_DECIMAL ||
           (style  === ES.NUMERIC_SHORTEST || (!named && style === ES.NAMED_OR_SHORTEST) || style === ES.SHORTEST) && cp <= 9999)
         numeric = '&#' + cp + ';';
