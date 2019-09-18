@@ -65,13 +65,15 @@ export function replaceIsolatedSurrogates(s: string): string {
       ch => ch.length === 1 ? '\x02' : ch.charAt(0) + '\x03');
 }
 
+// This combines two tests, whether a character is a valid first character of a standard HTML element
+// or custom HTML element, or if it's anything else that starts markup (/ ! ?) when it follows <.
 export function isMarkupStart(ch: string) {
-  return ch !== undefined && /[a-z\/!?]/i.test(ch);
+  return ch !== undefined && /[a-z:\/!?]/i.test(ch);
 }
 
 const PCENCharRanges = new RegExp(
   '[\xB7\xC0-\xD6\xD8-\xF6\xF8-\u037D\u037F-\u1FFF\u200C-\u200D\u203F-\u2040\u2070-\u218F' +
-  '\u2C00-\u2FEF\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD]'
+  '\u2C00-\u2FEF\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD]' // U+10000 - U+EFFFF tested separately
 );
 
 // PCEN: Potential Custom Element Name
@@ -88,14 +90,14 @@ export function isPCENChar(ch: string, loose = false) {
   return 0x10000 <= cp && cp <= 0xEFFFF;
 }
 
-export function isAllPCENChar(s: string): boolean {
+export function isAllPCENChar(s: string, loose = false): boolean {
   for (let i = 0; i < s.length; ++i) {
     let ch = s.charAt(i);
 
     if (s.codePointAt(i) > 0xFFFF)
       ch += s.charAt(++i);
 
-    if (!isPCENChar(ch))
+    if (!isPCENChar(ch, loose))
       return false;
   }
 
@@ -106,7 +108,7 @@ export function isAttributeNameChar(ch: string, loose = false): boolean {
   if (loose)
     return /[^ \n\r\t\f>=\/]/.test(ch);
   else
-    return ch > ' ' && !/["`>/=]/.test(ch) && (ch < '0x7F' || ch >= '0xA0');
+    return ch > ' ' && !/["`>\/=]/.test(ch) && (ch < '0x7F' || ch >= '0xA0');
 }
 
 const basicEntities: Record<string, string> = {'<': '&lt;', '>': '&gt;', '&': '&amp;'};
@@ -147,7 +149,7 @@ export function escapeToEntities(s: string, options?: EscapeOptions): string {
         cp <= 0xFFFF && nextCh && style >= ES.NAMED_OR_DECIMAL)
       named = pairMatch = pairsToEntity[s.substr(i, 2)];
 
-    if (entityNeeded && !named && options.reencode === RO.NAMED_ENTITIES)
+    if (!named && style >= ES.NAMED_OR_DECIMAL && (entityNeeded || options.reencode === RO.NAMED_ENTITIES))
       named = codePointToEntity[cp];
 
     if (!entityNeeded && named) {
@@ -246,8 +248,10 @@ export function resolveEntity(entity: string): string {
   return entities[entity] || (ambiguous ? original : '�');
 }
 
-export function codepointLength(s: string): number {
-  return s ? s.length - (s.match(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g) || []).length : 0;
+export function columnWidth(s: string): number {
+  return s ? s.length -
+    (s.match(/[\u0300-\u036F\u1AB0-\u1AFF\u1DC0-\u1DFF\u20D0-\u20FF\uFE20-\uFE2F]|[\uD800-\uDBFF][\uDC00-\uDFFF]/g)
+      || []).length : 0;
 }
 
 export function isValidEntityCodepoint(cp: number): boolean {
