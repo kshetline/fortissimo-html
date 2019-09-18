@@ -21,7 +21,8 @@ export abstract class DomElement {
   protected constructor(
     public content: string,
     public readonly line: number,
-    public readonly column: number
+    public readonly column: number,
+    public readonly terminated: boolean
   ) {}
 
   get depth(): number {
@@ -52,7 +53,8 @@ export abstract class DomElement {
   toJSON(): any {
     return this.toString() + ' (' + this.depth +
       (this.line ? `; ${this.line}, ${this.column}` : '') +
-      (this.parent ? '; ' + this.parent.tag : '') + ')';
+      (this.parent ? '; ' + this.parent.tag : '') + ')' +
+      this.terminated ? '' : '!';
   }
 }
 
@@ -60,26 +62,28 @@ export class CData extends DomElement {
   constructor(
     content: string,
     line: number,
-    column: number
+    column: number,
+    terminated: boolean
   ) {
-    super(content, line, column);
+    super(content, line, column, terminated);
   }
 
   toString(): string {
-    return '<![CDATA[' + this.content + ']]>';
+    return '<![CDATA[' + this.content + (this.terminated ? ']]>' : '');
   }
 }
 
 export class CommentElement extends DomElement {
   constructor(content: string,
     line: number,
-    column: number
+    column: number,
+    terminated: boolean
   ) {
-    super(content, line, column);
+    super(content, line, column, terminated);
   }
 
   toString(): string {
-    return '<!--' + this.content + '-->';
+    return '<!--' + this.content + (this.terminated ? '-->' : '');
   }
 }
 
@@ -87,13 +91,14 @@ export class DeclarationElement extends DomElement {
   constructor(
     content: string,
     line: number,
-    column: number
+    column: number,
+    terminated: boolean
   ) {
-    super(content, line, column);
+    super(content, line, column, terminated);
   }
 
   toString(): string {
-    return '<!' + this.content + '>';
+    return '<!' + this.content + (this.terminated ? '>' : '');
   }
 }
 
@@ -105,9 +110,10 @@ export class DocType extends DeclarationElement {
   constructor(
     content: string,
     line: number,
-    column: number
+    column: number,
+    terminated: boolean
   ) {
-    super(content, line, column);
+    super(content, line, column, terminated);
 
     this.type = /\bxhtml\b/i.test(content) ? 'xhtml' : 'html';
     this.variety = (/\b(frameset|strict|transitional)\b/i.exec(content.toLowerCase()) || [])[1] as any;
@@ -122,13 +128,14 @@ export class ProcessingElement extends DomElement {
   constructor(
     content: string,
     line: number,
-    column: number
+    column: number,
+    terminated: boolean
   ) {
-    super(content, line, column);
+    super(content, line, column, terminated);
   }
 
   toString(): string {
-    return '<?' + this.content + '>';
+    return '<?' + this.content + (this.terminated ? '>' : '');
   }
 }
 
@@ -139,7 +146,7 @@ export class TextElement extends DomElement {
     column: number,
     public possibleEntities: boolean
   ) {
-    super(content, line, column);
+    super(content, line, column, true);
   }
 
   toString(): string {
@@ -153,7 +160,7 @@ export class UnmatchedClosingTag extends DomElement {
     line: number,
     column: number
   ) {
-    super(content, line, column);
+    super(content, line, column, true);
   }
 
   toString(): string {
@@ -184,7 +191,7 @@ export class DomNode extends DomElement {
     caseSensitive = false,
     synthetic = false
   ) {
-    super(null, line, column);
+    super(null, line, column, true);
     this.tagLc = caseSensitive ? tag : tag.toLowerCase();
 
     if (synthetic)
