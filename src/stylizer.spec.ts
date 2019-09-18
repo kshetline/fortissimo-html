@@ -30,7 +30,9 @@ describe('stylizer', () => {
 
     expect(content).equals(reconstituted);
 
-    fs.writeFileSync('./test-output/sample.html', stylizeHtml(dom,
+    fs.writeFileSync('./test-output/sample.html', stylizeHtml(dom), { encoding: 'utf8' });
+
+    fs.writeFileSync('./test-output/sample-ws.html', stylizeHtml(dom,
       { showWhitespace: true }), { encoding: 'utf8' });
   });
 });

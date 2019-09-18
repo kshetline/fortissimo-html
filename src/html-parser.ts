@@ -376,6 +376,9 @@ export class HtmlParser {
               break;
             }
             else {
+              if (this.atEOF())
+                break;
+
               ++this.parseResults.errors;
               this.callback('error', 'Syntax error in end tag', this.line, this.column, '');
               this.pendingSource = this.collectedSpace + ch;
@@ -673,6 +676,7 @@ export class HtmlParser {
       else if (this.state === State.IN_END_TAG) {
         this.callback('error', 'Unexpected end of file in end tag', this.line, this.column, this.pendingSource);
         this.dom.addChild(new UnmatchedClosingTag(this.pendingSource, this.line, this.column));
+        this.collectedSpace = '';
       }
       else
         this.callback('error', 'Unexpected end of file', this.line, this.column, this.pendingSource);
@@ -985,7 +989,7 @@ export class HtmlParser {
       content += ch;
    }
 
-    return [content, false, false];
+    return [cdataDetected ? content.substr(7) : content, false, cdataDetected];
   }
 
   private async gatherUntilEndTag(endTag: string, init = ''): Promise<[string, string, boolean]> {

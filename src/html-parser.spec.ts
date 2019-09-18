@@ -192,11 +192,10 @@ describe('html-parser', () => {
   it('should handle a variety of unexpected EOF conditions', async () => {
     const endings = [
       '<!--', '<!--x', '<!someth..', '<?php', '<math><annotation><![CDATA[stuff', '<div',
-      '<span foo', '<span  foo =', '<span foo= "bar', '<', '</', '</a' // , '</a ', '</a b'
+      '<span foo', '<span  foo =', '<span foo= "bar', '<', '</', '</a', '</a ', '</a b'
     ];
 
     for (const ending of endings)  {
-      console.log('ending: %s', ending);
       const content = SMALL_SAMPLE + ending;
       const parser = new HtmlParser();
       let rebuilt = '';
