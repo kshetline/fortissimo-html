@@ -4,9 +4,17 @@ import iconv from 'iconv-lite';
 import { HtmlParser, ParseResults } from './html-parser';
 import { DocType } from './dom';
 
+const SMALL_SAMPLE =
+`<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Sample</title></head>
+<body>Sample</body>
+</html>
+`;
+
 describe('html-parser', () => {
   it('should properly parse HTML', async () => {
-    const content = fs.readFileSync('./test/sample.html', 'utf-8') + '<!--';
+    const content = fs.readFileSync('./test/sample.html', 'utf-8');
     const parser = new HtmlParser();
     let docType: DocType;
     let errors = 0;
@@ -150,7 +158,7 @@ describe('html-parser', () => {
     parser.off('encoding');
     content = iconv.decode(fs.readFileSync('./test/sample-iso-8859-1.html'), encoding);
     results = await parser.parse(content);
-    reconstituted = results.domRoot.toString();
+    reconstituted = results.toString();
 
     expect(content).equals(reconstituted);
     expect(reconstituted).contains('Mañana');
@@ -166,7 +174,7 @@ describe('html-parser', () => {
   });
 
   it('should handle waiting for input and characters split between chunks', async () => {
-    const content = iconv.decode(fs.readFileSync('./test/sample-iso-8859-1.html'), 'iso-8859-1') +
+    const content = fs.readFileSync('./test/sample-iso-8859-1.html', 'utf-8') +
       '@😀\r\n\r';
     const parser = new HtmlParser({ eol: false });
     let results: ParseResults;
@@ -179,6 +187,31 @@ describe('html-parser', () => {
     reconstituted = results.domRoot.toString();
 
     expect(content).equals(reconstituted);
+  });
+
+  it('should handle a variety of unexpected EOF conditions', async () => {
+    const endings = [
+      '<!--', '<!--x', '<!someth..', '<?php', '<math><annotation><![CDATA[stuff', '<div',
+      '<span foo', '<span  foo =', '<span foo= "bar', '<', '</', '</a' // , '</a ', '</a b'
+    ];
+
+    for (const ending of endings)  {
+      console.log('ending: %s', ending);
+      const content = SMALL_SAMPLE + ending;
+      const parser = new HtmlParser();
+      let rebuilt = '';
+      let results: ParseResults;
+
+      results = await parser
+        .on('generic', (depth, text) => {
+          rebuilt += text;
+        })
+        .parse(content);
+
+      expect(rebuilt).equals(content);
+      expect(results.toString()).equals(content);
+      expect(results.errors).equals(1);
+    }
   });
 
   it('should handle all eol options', async () => {

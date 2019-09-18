@@ -1,6 +1,8 @@
 import { copyScriptAsIIFE } from './copy-script';
-import { ClosureState, CData, CommentElement, DeclarationElement, DocType, DomElement, DomNode, ProcessingElement,
-  TextElement, UnmatchedClosingTag } from './dom';
+import {
+  ClosureState, CData, CommentElement, DeclarationElement, DocType, DomElement, DomNode, ProcessingElement,
+  TextElement, UnmatchedClosingTag, OQ, CQ
+} from './dom';
 import { isAllPCENChar, isKnownNamedEntity, isValidEntityCodepoint, minimalEscape, replaceIsolatedSurrogates, separateEntities } from './characters';
 import { NO_ENTITIES_ELEMENTS } from './elements';
 
@@ -115,7 +117,7 @@ function stylize(elem: DomElement, options?: HtmlStyleOptions): string {
     const badTerminator = elem.badTerminator;
 
     if (!elem.synthetic) {
-      result.push(markup('<', pf, badTerminator ? 'error' : 'markup', false, false));
+      result.push(markup('<', pf, badTerminator !== null ? 'error' : 'markup', false, false));
       result.push(markup(elem.tag, pf, badTerminator ? 'error' :
         isAllPCENChar(elem.tag) ? 'tag' : 'warning', false, false));
 
@@ -125,7 +127,7 @@ function stylize(elem: DomElement, options?: HtmlStyleOptions): string {
         result.push(markup(elem.equals[index] || '', pf, null, ws, false));
 
         const quote = elem.quotes[index];
-        const value = quote + elem.values[index] + quote;
+        const value = OQ(quote) + elem.values[index] + CQ(quote);
 
         if (!quote && /["'<=>`]/.test(value))
           result.push(markup(value, pf, 'warning', false, false));

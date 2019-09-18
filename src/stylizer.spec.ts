@@ -29,5 +29,8 @@ describe('stylizer', () => {
     const reconstituted = sb.join('').replace(/�/g, (match, index) => content.charAt(index));
 
     expect(content).equals(reconstituted);
+
+    fs.writeFileSync('./test-output/sample.html', stylizeHtml(dom,
+      { showWhitespace: true }), { encoding: 'utf8' });
   });
 });

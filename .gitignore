@@ -37,6 +37,7 @@ testem.log
 /typings
 /logs
 /.nyc_output
+/test-output
 
 # e2e
 /e2e/*.js

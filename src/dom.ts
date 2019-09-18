@@ -15,6 +15,14 @@ export enum ClosureState {
   IMPLICITLY_CLOSED
 }
 
+export function OQ(quote: string): string {
+  return quote.length < 2 ? quote : quote.substr(1);
+}
+
+export function CQ(quote: string): string {
+  return quote.length < 2 ? quote : '';
+}
+
 export abstract class DomElement {
   parent: DomNode;
 
@@ -170,7 +178,7 @@ export class UnmatchedClosingTag extends DomElement {
 
 export class DomNode extends DomElement {
   attributes: string[] = [];
-  badTerminator = '';
+  badTerminator: string = null;
   children: DomElement[];
   closureState = ClosureState.UNCLOSED;
   endTagLine = 0;
@@ -254,7 +262,7 @@ export class DomNode extends DomElement {
     if (this.synthetic)
       json.synthetic = true;
 
-    if (this.badTerminator)
+    if (this.badTerminator !== null)
       json.badTerminator = this.badTerminator;
 
     if (this.content)
@@ -291,14 +299,15 @@ export class DomNode extends DomElement {
 
       if (this.attributes) {
         this.attributes.forEach((attrib, index) => {
-          parts.push(this.spacing[index], attrib, this.equals[index], this.quotes[index], this.values[index], this.quotes[index]);
+          parts.push(this.spacing[index], attrib, this.equals[index],
+            OQ(this.quotes[index]), this.values[index], CQ(this.quotes[index]));
         });
       }
 
       if (this.innerWhitespace)
         parts.push(this.innerWhitespace);
 
-      if (this.badTerminator)
+      if (this.badTerminator !== null)
           parts.push(this.badTerminator);
       else if (this.closureState === ClosureState.SELF_CLOSED)
         parts.push('/>');

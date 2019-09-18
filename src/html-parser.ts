@@ -1,7 +1,7 @@
 import { processMillis } from './platform-specifics';
 import { VOID_ELEMENTS } from './elements';
 import { isAttributeNameChar, isEol, isMarkupStart, isPCENChar, isWhitespace } from './characters';
-import { CData, ClosureState, CommentElement, DeclarationElement, DocType, DomModel, DomNode, ProcessingElement, TextElement } from './dom';
+import { CData, ClosureState, CommentElement, CQ, DeclarationElement, DocType, DomModel, DomNode, OQ, ProcessingElement, TextElement, UnmatchedClosingTag } from './dom';
 
 export interface HtmlParserOptions {
   eol?: string | boolean;
@@ -75,8 +75,8 @@ type EventType = 'attribute' | 'cdata' | 'comment' | 'completion' | 'declaration
                  'end-tag' | 'error' | 'generic' | 'processing' | 'request-data' | 'start-tag-end' |
                  'start-tag-start' | 'text';
 
-const CAN_BE_HANDLED_GENERICALLY = new Set(['attribute', 'cdata', 'comment', 'declaration', 'end-tag', 'processing',
-                                            'start-tag-end', 'start-tag-start', 'text']);
+const CAN_BE_HANDLED_GENERICALLY = new Set(['attribute', 'cdata', 'comment', 'declaration', 'end-tag', 'error',
+                                            'processing', 'start-tag-end', 'start-tag-start', 'text']);
 
 export class HtmlParser {
   private attribute = '';
@@ -165,11 +165,12 @@ export class HtmlParser {
       return;
 
     switch (event) {
-      case 'attribute':       return cb(-1, args[0] + args[1] + args[2] + args[4] + args[3] + args[4]);
+      case 'attribute':       return cb(-1, args[0] + args[1] + args[2] + OQ(args[4]) + args[3] + CQ(args[4]));
       case 'cdata':           return cb(args[0], '<![CDATA[' + args[1] + (args[2] ? ']]>' : ''));
       case 'comment':         return cb(args[0], '<!--' + args[1] + (args[2] ? '-->' : ''));
       case 'declaration':     return cb(args[0], '<!' + args[1] + (args[2] ? '>' : ''));
       case 'end-tag':         return cb(args[0], '</' + args[1] + args[2]);
+      case 'error':           return cb(-1, args[3] || '');
       case 'processing':      return cb(args[0], '<?' + args[1] + (args[2] ? '>' : ''));
       case 'start-tag-end':   return cb(args[0], args[1] + args[2]);
       case 'start-tag-start': return cb(args[0], '<' + args[1]);
@@ -249,8 +250,7 @@ export class HtmlParser {
       this.htmlSourceIsFinal = this.nextChunkIsFinal;
       this.nextChunk = '';
       this.sourceIndex = 0;
-      this.resolveNextChunk(this.getChar() ||
-        (this.htmlSourceIsFinal && this.sourceIndex >= this.htmlSource.length ? '' : '---'));
+      this.resolveNextChunk(this.getChar() || (this.atEOF() ? '' : '---'));
     }
     else
       this.nextChunk = (this.nextChunk || '') + chunk;
@@ -317,7 +317,7 @@ export class HtmlParser {
 
           if (text) {
             this.dom.addChild(new TextElement(text, this.textLine, this.textColumn, true));
-            this.pendingSource = '<';
+            this.pendingSource = this.atEOF() && this.putBacks.length === 0 ? '' : '<';
             this.callback('text', this.dom.getDepth() + 1, text, true);
           }
 
@@ -477,10 +477,12 @@ export class HtmlParser {
             this.putBack(ch);
           }
           else {
-            const quote = (ch === '"' || ch === "'") ? ch : '';
-            const value = await this.gatherAttributeValue(quote, quote ? '' : ch);
+            let quote = (ch === '"' || ch === "'") ? ch : '';
+            let value;
+            [value, terminated] = await this.gatherAttributeValue(quote, quote ? '' : ch);
             const equals = this.preEqualsSpace + '=' + this.collectedSpace;
 
+            quote = (terminated ? '' : '_') + quote;
             this.dom.addAttribute(this.attribute, value, this.leadingSpace, equals, quote);
             this.doAttributeCallback(equals, value, quote);
             this.collectedSpace = '';
@@ -624,7 +626,7 @@ export class HtmlParser {
           [content, endTag, terminated] = await this.gatherUntilEndTag(tag, ch);
 
           if (!terminated) {
-            this.reportError(`File ended in unterminated ${tag} section`, false);
+            this.reportError(`File ended in unterminated <${tag}> section`, false);
             this.dom.getCurrentNode().closureState = ClosureState.UNCLOSED;
           }
 
@@ -650,8 +652,31 @@ export class HtmlParser {
         return;
     }
 
-    if (this.state !== State.OUTSIDE_MARKUP)
-      this.callback('error', 'Unexpected end of file', this.line, this.column);
+    if (this.state !== State.OUTSIDE_MARKUP) {
+      ++this.parseResults.errors;
+
+      if (this.state <= State.AT_ATTRIBUTE_VALUE) {
+        if (this.state === State.AT_ATTRIBUTE_ASSIGNMENT) {
+          this.dom.addAttribute(this.attribute, '', this.leadingSpace, '', '');
+          this.doAttributeCallback('', '', '');
+        }
+        else if (this.state === State.AT_ATTRIBUTE_VALUE) {
+          const equals = this.preEqualsSpace + '=';
+
+          this.dom.addAttribute(this.attribute, '', this.leadingSpace, equals, '');
+          this.doAttributeCallback(equals, '', '');
+        }
+
+        this.dom.getCurrentNode().badTerminator = '';
+        this.callback('error', `Unexpected end of <${this.currentTag}> tag`, this.line, this.column);
+      }
+      else if (this.state === State.IN_END_TAG) {
+        this.callback('error', 'Unexpected end of file in end tag', this.line, this.column, this.pendingSource);
+        this.dom.addChild(new UnmatchedClosingTag(this.pendingSource, this.line, this.column));
+      }
+      else
+        this.callback('error', 'Unexpected end of file', this.line, this.column, this.pendingSource);
+    }
 
     if (this.collectedSpace) {
       this.dom.addChild(new TextElement(this.collectedSpace, this.textLine, this.textColumn, true));
@@ -694,6 +719,10 @@ export class HtmlParser {
   private doAttributeCallback(equalSign: string, value: string, quote: string): void {
     this.callback('attribute', this.leadingSpace, this.attribute, equalSign, value, quote);
     this.pendingSource = '';
+  }
+
+  private atEOF(): boolean {
+    return this.htmlSourceIsFinal && this.sourceIndex >= (this.htmlSource || '').length;
   }
 
   private getChar(): string {
@@ -800,7 +829,7 @@ export class HtmlParser {
   }
 
   private async getNextChunkChar(): Promise<string> {
-    if (this.htmlSourceIsFinal && (!this.htmlSource || this.sourceIndex >= this.htmlSource.length))
+    if (this.atEOF())
       return '';
     else if (this.nextChunk || this.nextChunkIsFinal) {
       this.htmlSource = this.nextChunk || '';
@@ -892,7 +921,7 @@ export class HtmlParser {
     this.putBack(ch);
   }
 
-  private async gatherAttributeValue(quote: string, init = ''): Promise<string> {
+  private async gatherAttributeValue(quote: string, init = ''): Promise<[string, boolean]> {
     let value = init;
 
     let ch: string;
@@ -912,7 +941,7 @@ export class HtmlParser {
       }
     }
 
-    return value;
+    return [value, !quote || ch === quote];
   }
 
   private async gatherComment(init = ''): Promise<[string, boolean]> {

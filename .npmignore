@@ -9,3 +9,4 @@
 *.spec.d.ts
 *.spec.js
 /.nyc_output
+/test-output
