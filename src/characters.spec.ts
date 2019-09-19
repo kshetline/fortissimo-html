@@ -86,7 +86,7 @@ describe('characters', () => {
     expect(isOtherWhitespace('q')).to.be.false;
   });
 
-  it('should recognize character which, when preceded by <. signal HTML markup', () => {
+  it('should recognize characters which, when preceded by <. signal HTML markup', () => {
     'abc:/!?'.split('').forEach(ch => expect(isMarkupStart(ch)).to.be.true);
     '7#é,'.split('').forEach(ch => expect(isMarkupStart(ch)).to.be.false);
   });

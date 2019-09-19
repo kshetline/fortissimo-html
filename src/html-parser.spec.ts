@@ -4,7 +4,7 @@ import iconv from 'iconv-lite';
 import { HtmlParser, ParseResults } from './html-parser';
 import { DocType } from './dom';
 
-const SMALL_SAMPLE =
+export const SMALL_SAMPLE =
 `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><title>Sample</title></head>

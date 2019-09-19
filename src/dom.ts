@@ -92,7 +92,7 @@ export abstract class DomElement {
     return this.toString() + ' (' + this.depth +
       (this.line ? `; ${this.line}, ${this.column}` : '') +
       (this.parent ? '; ' + this.parent.tag : '') + ')' +
-      this.terminated ? '' : '!';
+      (this.terminated ? '' : '!');
   }
 }
 
@@ -311,6 +311,10 @@ export class DomNode extends DomElement {
     return text.join('');
   }
 
+  get innerHTML(): string {
+    return this.toString(false);
+  }
+
   countUnclosed(): [number, number] {
     let unclosed = 0;
     let implicitlyClosed = 0;
@@ -350,9 +354,6 @@ export class DomNode extends DomElement {
     if (this.badTerminator !== null)
       json.badTerminator = this.badTerminator;
 
-    if (this.content)
-      json.content = this.content;
-
     json.depth = this.depth;
 
     if (json.depth !== this.syntheticDepth)
@@ -376,10 +377,10 @@ export class DomNode extends DomElement {
     return json;
   }
 
-  toString(): string {
+  toString(includeSelf = true): string {
     const parts: string[] = [];
 
-    if (!this.synthetic) {
+    if (includeSelf && !this.synthetic) {
       parts.push('<', this.tag);
 
       if (this.attributes) {
@@ -403,7 +404,7 @@ export class DomNode extends DomElement {
     if (this.children)
       this.children.forEach(child => parts.push(child.toString()));
 
-    if (!this.synthetic && this.closureState === ClosureState.EXPLICITLY_CLOSED && this.endTagText)
+    if (includeSelf && !this.synthetic && this.closureState === ClosureState.EXPLICITLY_CLOSED && this.endTagText)
       parts.push(this.endTagText);
 
     return parts.join('');

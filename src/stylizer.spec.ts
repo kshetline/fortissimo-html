@@ -30,6 +30,7 @@ describe('stylizer', () => {
 
     expect(content).equals(reconstituted);
 
+    try {fs.mkdirSync('./test-output'); } catch (err) {}
     fs.writeFileSync('./test-output/sample.html', stylizeHtml(dom), { encoding: 'utf8' });
 
     fs.writeFileSync('./test-output/sample-ws.html', stylizeHtml(dom,
