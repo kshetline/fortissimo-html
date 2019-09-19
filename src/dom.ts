@@ -1,4 +1,5 @@
 import { FORMATTING_ELEMENTS, MARKER_ELEMENTS, OPEN_IMPLIES_CLOSE } from './elements';
+import { unescapeEntities } from './characters';
 
 function last<T>(array: T[]): T {
   if (array && array.length > 0)
@@ -21,6 +22,35 @@ export function OQ(quote: string): string {
 
 export function CQ(quote: string): string {
   return quote.length < 2 ? quote : '';
+}
+
+interface Selector {
+  element: string;
+  id: string;
+  qlass: string;
+}
+
+function stringToSelector(s: string): Selector {
+  const selector = {} as Selector;
+  const $ = /(.*)\.(.+)/.exec(s);
+
+  if ($) {
+    s = $[1];
+    selector.qlass = $[2];
+  }
+
+  if (s) {
+    if (s.startsWith('#'))
+      selector.id = s.substr(1);
+    else if (s === '*')
+      selector.element = '';
+    else
+      selector.element = s.toLowerCase();
+  }
+  else
+    selector.element = '';
+
+  return selector;
 }
 
 export abstract class DomElement {
@@ -191,6 +221,7 @@ export class DomNode extends DomElement {
   synthetic?: boolean;
   tagLc: string;
   values: string[] = [];
+  valuesLookup: Record<string, string> = {};
 
   constructor(
     public tag: string,
@@ -212,6 +243,7 @@ export class DomNode extends DomElement {
     this.spacing.push(leadingSpace);
     this.equals.push(equals);
     this.quotes.push(quote);
+    this.valuesLookup[name] = value;
   }
 
   addChild(child: DomElement): void {
@@ -224,6 +256,59 @@ export class DomNode extends DomElement {
     this.endTagText = text;
     this.endTagLine = line;
     this.endTagColumn = column;
+  }
+
+  querySelector(selector: string): DomNode {
+    const results: DomNode[] = [];
+
+    this.querySelectorImpl(selector, results, 1);
+
+    if (results.length === 0)
+      return null;
+    else
+      return results[0];
+  }
+
+  querySelectorAll(selector: string): DomNode[] {
+    const results: DomNode[] = [];
+
+    this.querySelectorImpl(selector, results);
+
+    return results;
+  }
+
+  private querySelectorImpl(selector: string | Selector, results: DomNode[], limit = Number.MAX_SAFE_INTEGER): void {
+    if (typeof selector === 'string')
+      selector = stringToSelector(selector);
+
+    if ((!selector.element || this.tagLc === selector.element) &&
+        (!selector.qlass || (this.valuesLookup.class || '').split(/\s+/).indexOf(selector.qlass) >= 0) &&
+        (!selector.id || this.valuesLookup.id === selector.id))
+      results.push(this);
+
+    if (this.children) {
+      for (let i = 0; i < this.children.length && results.length < limit; ++i) {
+        if (this.children[i] instanceof DomNode)
+          (this.children[i] as DomNode).querySelectorImpl(selector, results);
+      }
+    }
+  }
+
+  get textContent(): string {
+    const text: string[] = [];
+
+    if (this.children) {
+      for (const child of this.children) {
+        if (child instanceof CData)
+          text.push(child.content);
+        else if (child instanceof TextElement)
+          text.push(child.possibleEntities ? unescapeEntities(child.content) : child.content);
+        else if (child instanceof DomNode)
+          text.push(child.textContent);
+      }
+    }
+
+    return text.join('');
   }
 
   countUnclosed(): [number, number] {
