@@ -2,12 +2,16 @@ import { expect } from 'chai';
 import fs from 'fs';
 import { HtmlParser } from './html-parser';
 import { SMALL_SAMPLE } from './html-parser.spec';
-import { CData } from './dom';
+import { CData, DomNode } from './dom';
 
-describe('dom', async () => {
+describe('dom', () => {
   const content = fs.readFileSync('./test/sample.html', 'utf-8');
   const parser = new HtmlParser();
-  const results = (await parser.parse(content)).domRoot;
+  let results: DomNode;
+
+  before(async () => {
+    results = (await parser.parse(content)).domRoot;
+  });
 
   it('should produce searchable DOM tree', () => {
     const svg = results.querySelector('svg');
@@ -57,7 +61,7 @@ describe('dom', async () => {
 
     parser.reset();
     expect(JSON.stringify((await parser.parse(SMALL_SAMPLE + '<!--')).domRoot)).contains(')!');
- 
+
     expect(JSON.stringify(new CData('yeti', 0, 0, false))).does.not.contain('line').and.does.not.contain(']]>');
   });
 });

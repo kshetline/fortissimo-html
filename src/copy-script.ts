@@ -4,7 +4,6 @@
 // tslint:disable no-var-keyword
 const wsReplacements: Record<string, string> = {
   '·': ' ',
-  '→\t': '\t',
   '↵\n': '\n',
   '↧\f': '\f',
   '␍\r': '\r',
@@ -28,7 +27,7 @@ function restoreWhitespaceStrict(s: string) {
 }
 
 function restoreWhitespace(s: string) {
-  return s.replace(/·|→\t|↵\n|↧\f|␍\r|␍↵\r\n|•|→|↵|↧|␍|�/g, function(ws) {
+  return s.replace(/·|↵\n|↧\f|␍\r|␍↵\r\n|•|↵|↧|␍|�/g, function(ws) {
     return wsReplacements[ws] || ''; });
 }
 

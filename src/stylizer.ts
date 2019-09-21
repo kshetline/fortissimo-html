@@ -186,6 +186,16 @@ function generateCss(options: HtmlStyleOptions) {
     white-space: pre;
   }
 
+  .${prefix}-tab {
+    color: ${options.colors.whitespace};
+  }
+
+  .${prefix}-tab::before {
+    content: "→";
+    display: inline-block;
+    overflow-x: visible;
+    width: 0;
+  }
 `;
 
   COLORS.forEach(color => {
@@ -200,7 +210,7 @@ function generateCss(options: HtmlStyleOptions) {
 
 const whitespaces: Record<string, string> = {
   ' ': '·',
-  '\t': '→\t',
+  '\t': '\t',
   '\n': '↵\n',
   '\f': '↧\f',
   '\r': '␍\r',
@@ -215,13 +225,13 @@ function markup(s: string, prefix: string, qlass: string, markWhitespace: boolea
   else if (!qlass && !markWhitespace && !markEntities && !checkInvalid)
     return minimalEscape(s);
   else if (markWhitespace) {
-    return s.split(/([ \n\r\t\f\xA0]+)/).map((match, index) => {
+    return s.split(/([ \n\r\f\xA0]+|\t)/).map((match, index) => {
       if (index % 2 === 1) {
         match = match.replace(/\r\n|./gs, ch => whitespaces[ch]);
 
-        return markup(match, prefix, 'whitespace', false, false, false);
+        return markup(match, prefix, match === '\t' ? 'tab' : 'whitespace', false, false, false);
       }
-      else {
+      else if (match) {
         return match.split(/([\u2000-\u200A]|\u202F|\u205F|\u3000)/).map((match2, index2) => {
           if (index2 % 2 === 1)
             return markup(match2, prefix, 'bg_whitespace', false, false, false);
@@ -229,6 +239,8 @@ function markup(s: string, prefix: string, qlass: string, markWhitespace: boolea
             return markup(match2, prefix, qlass, false, markEntities, checkInvalid);
         }).join('');
       }
+      else
+        return '';
     }).join('');
   }
   else if (checkInvalid) {

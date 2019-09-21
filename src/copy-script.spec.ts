@@ -51,7 +51,7 @@ const fakeDocument = {
               childNodes: [
                 {
                   classList: new FakeClassList(['xxx-whitespace']),
-                  innerText: '·•↵'
+                  innerText: '·\t•↵'
                 },
                 {
                   classList: new FakeClassList([]),
@@ -71,7 +71,7 @@ const fakeDocument = {
           }
         };
       },
-      toString: function () { return '·•↵foobar���'; }
+      toString: function () { return '·\t•↵foobar���'; }
     };
   }
 };
@@ -93,10 +93,10 @@ describe('copy-script', () => {
     expect(callback).to.be.ok;
     throwCopyError = true;
     callback(fakeCopyEvent);
-    expect(clipboardText).equals(' \xA0foobar');
+    expect(clipboardText).equals(' \t\xA0foobar');
     throwCopyError = false;
     callback(fakeCopyEvent);
-    expect(clipboardText).equals(' \xA0foobar');
+    expect(clipboardText).equals(' \t\xA0foobar');
 
     if (saveDocument)
       (global as any).document = saveDocument;
