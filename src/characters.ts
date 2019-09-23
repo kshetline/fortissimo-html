@@ -79,7 +79,7 @@ const PCENCharRanges = new RegExp(
 // PCEN: Potential Custom Element Name
 export function isPCENChar(ch: string, loose = false) {
   if (loose)
-    return /[^ \n\r\t\f>]/.test(ch);
+    return /[^ \n\r\t\f\/>]/.test(ch);
   else if (ch <= 'z')
     return /[-._0-9a-z]/i.test(ch);
   else if (ch.length === 1)
