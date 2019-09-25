@@ -20,8 +20,8 @@ describe('dom', () => {
     expect(svg.tagLc).equals('svg');
     expect(svg.valuesLookup.width).equals('300');
 
-    expect(th.depth).equals(6);
-    expect(th.syntheticDepth).equals(7);
+    expect(th.depth).equals(4);
+    expect(th.syntheticDepth).equals(5);
 
     expect(results.querySelector('#list').tagLc).equals('ul');
     expect(results.querySelectorAll('li').length).equals(6);

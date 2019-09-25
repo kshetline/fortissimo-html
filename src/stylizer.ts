@@ -17,6 +17,7 @@ export interface HtmlStyleOptions {
   outerTag?: 'html' | 'body' | 'div';
   showWhitespace?: boolean;
   stylePrefix?: string;
+  tabSize?: number;
   title?: string;
 }
 
@@ -27,6 +28,7 @@ const DEFAULT_OPTIONS = {
   outerTag: 'html',
   showWhitespace: false,
   stylePrefix: 'fh',
+  tabSize: 8,
   title: 'Stylized HTML'
 };
 
@@ -183,6 +185,8 @@ function generateCss(options: HtmlStyleOptions) {
     background-color: ${options.colors.background};
     color: ${options.colors.foreground};
     font: ${options.font};
+    -moz-tab-size: ${options.tabSize};
+    tab-size: ${options.tabSize};
     white-space: pre;
   }
 

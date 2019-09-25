@@ -19,7 +19,7 @@ describe('formatter', () => {
 
     try {fs.mkdirSync('./test-output'); } catch (err) {}
     fs.writeFileSync('./test-output/sample-reformatted.html', stylizeHtml(dom,
-      { showWhitespace: true }), { encoding: 'utf8' });
+      { showWhitespace: true , title: 'Reformatted HTML'}), { encoding: 'utf8' });
 
     expect(true).to.be.true;
   });

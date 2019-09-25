@@ -211,6 +211,7 @@ export class DomNode extends DomElement {
   badTerminator: string = null;
   children: DomElement[];
   closureState = ClosureState.UNCLOSED;
+  contentInline = false; // Used by formatter.ts
   endTagLine = 0;
   endTagColumn = 0;
   endTagText = '';
