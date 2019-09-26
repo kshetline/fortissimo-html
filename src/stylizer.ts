@@ -117,11 +117,14 @@ function stylize(elem: DomElement, options?: HtmlStyleOptions): string {
   else if (elem instanceof DomNode) {
     const result: string[] = [];
     const badTerminator = elem.badTerminator;
+    let tagClass = 'tag';
 
     if (!elem.synthetic) {
+      if (!isAllPCENChar(elem.tag))
+        tagClass = 'warning';
+
       result.push(markup('<', pf, badTerminator !== null ? 'error' : 'markup', false, false));
-      result.push(markup(elem.tag, pf, badTerminator ? 'error' :
-        isAllPCENChar(elem.tag) ? 'tag' : 'warning', false, false));
+      result.push(markup(elem.tag, pf, badTerminator ? 'error' : tagClass, false, false));
 
       elem.attributes.forEach((attrib, index) => {
         result.push(markup(elem.spacing[index], pf, null, ws, false));
@@ -156,7 +159,7 @@ function stylize(elem: DomElement, options?: HtmlStyleOptions): string {
       result.push(markup('</', pf, terminated ? 'markup' : 'error', false, false));
 
       if (terminated) {
-        result.push(markup(elem.endTagText.substring(2, elem.endTagText.length - 1), pf, 'tag', ws, false));
+        result.push(markup(elem.endTagText.substring(2, elem.endTagText.length - 1), pf, tagClass, ws, false));
         result.push(markup('>', pf, 'markup', false, false));
       }
       else

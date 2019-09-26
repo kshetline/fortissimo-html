@@ -20,7 +20,7 @@ ${restoreWhitespace.toString()}
 
 (${addListener.toString()})();
 })();
-`;
+`.replace(/cov_\w+\.\w(\[\d+\])+\+\+[;,]/g, ''); // Remove code-coverage changes that might get embedded in the code.
 
 function restoreWhitespaceStrict(s: string) {
   return s.replace(/[^ \n\r\t\f\xA0]/g, function(ch) { return ch === '·' ? ' ' : ch === '•' ? '\xA0' : ''; });

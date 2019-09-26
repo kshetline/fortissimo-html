@@ -8,7 +8,7 @@ export const SMALL_SAMPLE =
 `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><title>Sample</title></head>
-<body>Sample</body>
+<body>Sample<img src="/foo.jpg" width="32" height="32" alt="can't"/></body>
 </html>
 `;
 

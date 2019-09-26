@@ -217,12 +217,12 @@ function formatAttributes(node: DomNode, indent: number, options: InternalOption
       else if (options.valueQuoteStyle === ValueQuoteStyle.DOUBLE ||
                (options.valueQuoteStyle === ValueQuoteStyle.PREFER_DOUBLE && (!/"/.test(value) || /'/.test(value)))) {
         node.quotes[i] = '"';
-        value.replace(/"/g, '&quot;');
+        node.values[i] = value.replace(/"/g, '&quot;');
       }
       else if (options.valueQuoteStyle === ValueQuoteStyle.SINGLE ||
                (options.valueQuoteStyle === ValueQuoteStyle.PREFER_SINGLE && (!/'/.test(value) || /"/.test(value)))) {
         node.quotes[i] = "'";
-        value.replace(/'/g, '&apos;');
+        node.values[i] = value.replace(/'/g, '&apos;');
       }
     }
 
