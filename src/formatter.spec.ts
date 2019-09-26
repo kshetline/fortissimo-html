@@ -19,7 +19,9 @@ describe('formatter', () => {
   it('should format HTML', () => {
     formatHtml(dom, {
       indent: 2,
+      childrenNotIndented: ['-thead', '-tbody', '-tfoot'],
       continuationIndent: 4,
+      instantiateSyntheticNodes: true,
       valueQuoting: ValueQuoting.UNQUOTE_SIMPLE_VALUES
     });
 

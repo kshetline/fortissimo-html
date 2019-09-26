@@ -25,6 +25,7 @@ export interface HtmlFormatOptions {
   endDocumentWithNewline?: boolean;
   indent?: number;
   inline?: string[];
+  instantiateSyntheticNodes?: boolean;
   keepWhitespaceInside?: string[];
   newLineBefore?: string[];
   normalizeAttributeSpacing?: boolean;
@@ -47,6 +48,7 @@ interface InternalOptions {
   eol: string;
   indent: number;
   inline: Set<string>;
+  instantiateSyntheticNodes: boolean;
   keepWhitespaceInside: Set<string>;
   lastText: TextElement;
   newLineBefore: Set<string>;
@@ -72,6 +74,7 @@ const DEFAULT_OPTIONS: InternalOptions = {
   inline: new Set(['a', 'abbr', 'acronym', 'b', 'basefont', 'bdo', 'big', 'br', 'cite', 'cite', 'code', 'dfn',
                    'em', 'font', 'i', 'img', 'input', 'kbd', 'label', 'q', 's', 'samp', 'select', 'small', 'span',
                    'strike', 'strong', 'sub', 'sup', 'tt', 'u', 'var']),
+  instantiateSyntheticNodes: false,
   keepWhitespaceInside: new Set(['/', 'pre', 'span', 'textarea']),
   lastText: null,
   newLineBefore: new Set(['body', 'div', 'form', 'h1', 'h2', 'h3', 'p']),
@@ -89,7 +92,11 @@ const DEFAULT_OPTIONS: InternalOptions = {
 export function formatHtml(node: DomNode, options?: HtmlFormatOptions): void {
   const opts = processOptions(options || {});
 
-  removeSyntheticNodes(node);
+  if (opts.instantiateSyntheticNodes)
+    instantiateSyntheticNodes(node);
+  else
+    removeSyntheticNodes(node);
+
   findInlineContent(node, opts);
 
   if (!opts.eol)
@@ -163,8 +170,8 @@ function formatNode(node: DomNode, options: InternalOptions, indent: number): vo
       formatNode(elem, options, indent + delta);
 
       if (!elem.children)
-        options.lastText = null;
-      else if (!options.lastText)
+        options.lastText = elem.closureState === ClosureState.EXPLICITLY_CLOSED ? undefined : null;
+      else if (options.lastText === null)
         options.lastText = saveLastText;
     }
     else if (elem instanceof TextElement)
@@ -193,8 +200,10 @@ function formatNode(node: DomNode, options: InternalOptions, indent: number): vo
       options.lastText.content = options.lastText.content.replace(/(?:\r\n|\n|\r)[ \t\f]*$/, '');
   }
 
-  if (node.closureState !== ClosureState.IMPLICITLY_CLOSED)
-    options.lastText = null;
+  if (node.closureState === ClosureState.EXPLICITLY_CLOSED)
+    options.lastText = undefined; // undefined signifies that any saved lastText should be cleared.
+  else if (node.closureState !== ClosureState.IMPLICITLY_CLOSED)
+    options.lastText = null; // null signifies that any saved lastText should be restored.
 }
 
 function applyIndentation(elem: DomElement, indent: number, options: InternalOptions): void {
@@ -246,12 +255,28 @@ function formatAttributes(node: DomNode, indent: number, options: InternalOption
   }
 }
 
+function instantiateSyntheticNodes(node: DomNode): void {
+  if (!node.children)
+    return;
+
+  for (const elem of node.children) {
+    if (elem instanceof DomNode) {
+      if (elem.synthetic) {
+        elem.synthetic = false;
+        elem.closureState = ClosureState.EXPLICITLY_CLOSED;
+        elem.endTagText = '</' + elem.tag + '>';
+      }
+
+      instantiateSyntheticNodes(elem);
+    }
+  }
+}
+
 function removeSyntheticNodes(node: DomNode): void {
   const children = node.children;
 
   if (!children)
     return;
-
 
   for (let i = 0; i < children.length; ++i) {
     const elem = children[i];
@@ -299,7 +324,9 @@ function processOptions(options: HtmlFormatOptions): InternalOptions {
   const opts = Object.assign({}, DEFAULT_OPTIONS);
 
   Object.keys(options).forEach(option => {
-    if (option in DEFAULT_OPTIONS && typeof (DEFAULT_OPTIONS as any)[option] === typeof (options as any)[option])
+    if (option in DEFAULT_OPTIONS &&
+        typeof (DEFAULT_OPTIONS as any)[option] === typeof (options as any)[option] &&
+        Array.isArray((DEFAULT_OPTIONS as any)[option]) === Array.isArray((options as any)[option]))
       (opts as any)[option] = (options as any)[option];
   });
 

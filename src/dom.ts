@@ -417,7 +417,6 @@ export class DomModel {
 
   private currentNode = this.root;
   private inMathOrSvg = 0;
-  private inTable = 0;
   private openStack = [this.root];
   private xmlMode = false;
 
@@ -462,36 +461,87 @@ export class DomModel {
     }
   }
 
-  addChild(child: DomElement, pending_th = false): void {
-    if (!this.xmlMode) {
-      if (this.inTable > 0 && child instanceof DomNode && /^(td|th)$/.test(child.tagLc) &&
-          this.currentNode.tagLc !== 'tr') {
-        const newParent = new DomNode('tr', 0, 0, false, true);
+  addChild(child: DomElement): void {
+    this.currentNode.addChild(child);
+  }
 
-        this.addChild(newParent, child.tagLc === 'th');
-        this.openStack.push(newParent);
-        this.currentNode = newParent;
-      }
-      else if (this.inTable > 0 && child instanceof DomNode && child.tagLc === 'tr' &&
-               !/^(tbody|thead|table)$/.test(this.currentNode.tagLc)) {
-        const newParent = new DomNode(pending_th ? 'thead' : 'tbody', 0, 0, false, true);
+  private examineTable(table: DomNode): void {
+    const children = table.children;
 
-        this.addChild(newParent);
-        this.openStack.push(newParent);
-        this.currentNode = newParent;
+    if (!children || this.xmlMode)
+      return;
+
+    this.insertRowsWhereNeeded(table);
+
+    const sections = new Set<string>();
+
+    for (const elem of children) {
+      if (elem instanceof DomNode) {
+        if (/^(thead|tbody|tfoot)$/.test(elem.tagLc)) {
+          sections.add(elem.tagLc);
+          this.insertRowsWhereNeeded(elem);
+        }
       }
     }
 
-    this.currentNode.addChild(child);
+    if (sections.size === 0)
+      return;
+
+    let section: DomNode;
+
+    for (let i = 0; i < children.length; ++i) {
+      const elem = children[i];
+
+      if (elem instanceof DomNode) {
+        if (/^(thead|tbody|tfoot)$/.test(elem.tagLc))
+          section = elem.closureState === ClosureState.EXPLICITLY_CLOSED ? undefined : elem;
+        else if (elem.tagLc === 'tr') {
+          const hasTh = !!elem.querySelector('th');
+
+          if (!section || (hasTh && section.tagLc !== 'thead')) {
+            section = new DomNode(hasTh ? 'thead' : 'tbody', 0, 0, false, true);
+            section.parent = table;
+            children[i] = section;
+          }
+
+          section.addChild(elem);
+        }
+      }
+    }
+  }
+
+  private insertRowsWhereNeeded(node: DomNode): void {
+    const children = node.children;
+
+    if (!children)
+      return;
+
+    let row: DomNode;
+
+    for (let i = 0; i < children.length; ++i) {
+      const elem = children[i];
+
+      if (elem instanceof DomNode) {
+        if (elem.tagLc === 'th' || elem.tagLc === 'td') {
+          if (!row) {
+            row = new DomNode('tr', 0, 0, false, true);
+            row.parent = node;
+            children[i] = row;
+          }
+
+          row.addChild(elem);
+        }
+        else if (elem.tagLc === 'tr')
+          row = elem.closureState === ClosureState.EXPLICITLY_CLOSED ? undefined : elem;
+      }
+    }
   }
 
   push(node: DomNode): void {
     this.openStack.push(node);
     this.currentNode = node;
 
-    if (node.tagLc === 'table')
-      ++this.inTable;
-    else if (node.tagLc === 'math' || node.tagLc === 'svg')
+    if (node.tagLc === 'math' || node.tagLc === 'svg')
       ++this.inMathOrSvg;
   }
 
@@ -511,6 +561,9 @@ export class DomModel {
         this.currentNode.closureState = ClosureState.EXPLICITLY_CLOSED;
         this.currentNode.setEndTag(endTagText, line, column);
       }
+
+      if (this.currentNode.tagLc === 'table')
+        this.examineTable(this.currentNode);
     }
 
     if (!popped && !this.xmlMode) {
@@ -535,6 +588,9 @@ export class DomModel {
             }
             else
               this.currentNode.closureState = ClosureState.IMPLICITLY_CLOSED;
+
+            if (this.currentNode.tagLc === 'table')
+              this.examineTable(this.currentNode);
           }
 
           this.openStack.pop();
@@ -554,9 +610,7 @@ export class DomModel {
     this.updateCurrentNode();
 
     this.inMathOrSvg = 0;
-    this.inTable = 0;
     this.openStack.forEach((node, index) => {
-      this.inTable += (node.tagLc === 'table' ? 1 : 0);
       this.inMathOrSvg += (node.tagLc === 'math' || node.tagLc === 'svg' ? 1 : 0);
 
       if (index > 0)

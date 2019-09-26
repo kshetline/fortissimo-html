@@ -219,6 +219,11 @@ export class HtmlParser {
     this.state = State.OUTSIDE_MARKUP;
     this.xmlMode = this.options.xmlMode;
 
+    if (this.parsingResolver) {
+      this.parsingResolver(null);
+      this.parsingResolver = null;
+    }
+
     if (this.resolveNextChunk) {
       this.resolveNextChunk('');
       this.resolveNextChunk = undefined;
@@ -699,6 +704,9 @@ export class HtmlParser {
       else
         this.callback('error', 'Unexpected end of file', this.line, this.column, this.pendingSource);
     }
+
+    if (!this.parseResults) // In case parser reset while running.
+      return;
 
     if (this.collectedSpace) {
       this.dom.addChild(new TextElement(this.collectedSpace, this.textLine, this.textColumn, true));

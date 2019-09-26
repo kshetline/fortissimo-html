@@ -171,6 +171,20 @@ describe('html-parser', () => {
     setTimeout(() => parser.stop(), 100);
     results = await parser.parse();
     expect(results.stopped).to.be.true;
+    expect(results.toString()).equals('');
+    expect(new ParseResults().toString()).equals('');
+  });
+
+  it('can reset the parser', async () => {
+    const parser = new HtmlParser();
+    let results: ParseResults;
+
+    setTimeout(() => parser.reset(), 100);
+    results = await parser.parse();
+    expect(results).to.be.null;
+
+    parser.stop();
+    expect(true).to.be.ok;
   });
 
   it('should handle waiting for input and characters split between chunks', async () => {
@@ -187,6 +201,23 @@ describe('html-parser', () => {
     reconstituted = results.domRoot.toString();
 
     expect(content).equals(reconstituted);
+  });
+
+  it('should allow </ as plain text', async () => {
+    const endBody = SMALL_SAMPLE.indexOf('</body>');
+    const content = SMALL_SAMPLE.substr(0, endBody) + '</> </ >' + SMALL_SAMPLE.substr(endBody);
+    const parser = new HtmlParser({ emptyEndTag: false });
+    let rebuilt = '';
+    let results: ParseResults;
+
+    results = await parser
+      .on('generic', (depth, text) => {
+        rebuilt += text;
+      })
+      .parse(content);
+
+    expect(rebuilt).equals(content);
+    expect(results.errors).equals(0);
   });
 
   it('should handle a variety of unexpected EOF conditions', async () => {
