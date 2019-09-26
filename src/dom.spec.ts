@@ -32,7 +32,7 @@ describe('dom', () => {
     expect(results.querySelector('div.sizer').textContent).equals('\xA0');
     expect(results.querySelector('annotation').textContent).equals('Second CDATA example &amp; entities ignored');
     expect(results.querySelector('ul').textContent.trim().replace(/\s+/g, ' '))
-      .equals('One thing after another after another ·↵·');
+      .equals('One thing afteranother after another ·↵·');
     expect(results.querySelector('script').textContent).contains('function foo(value)');
 
     expect(results.querySelector('#inner-test').innerHTML).equals('innerHTML <em>test</em>');

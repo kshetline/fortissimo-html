@@ -1,6 +1,22 @@
 import { ClosureState, DomElement, DomNode, TextElement } from './dom';
 import { columnWidth } from './characters';
 
+export enum ValueQuoting {
+  ALWAYS_QUOTE,
+  LEAVE_AS_IS,
+  UNQUOTE_INTEGERS,
+  UNQUOTE_SIMPLE_VALUES
+}
+
+const SIMPLE_VALUE = /^[-\da-z._]+$/i;
+
+export enum ValueQuoteStyle {
+  PREFER_DOUBLE,
+  PREFER_SINGLE,
+  DOUBLE,
+  SINGLE
+}
+
 export interface HtmlFormatOptions {
   alignAttributes?: boolean;
   continuationIndent?: number;
@@ -11,11 +27,15 @@ export interface HtmlFormatOptions {
   inline?: string[];
   keepWhitespaceInside?: string[];
   newLineBefore?: string[];
+  normalizeAttributeSpacing?: boolean;
   removeNewLineBefore?: string[];
   removeUnclosedTags?: boolean;
+  spaceAroundAttributeEquals?: boolean;
   tabSize?: number;
   trimDocument?: boolean;
   useTabCharacters?: boolean;
+  valueQuoting?: ValueQuoting;
+  valueQuoteStyle?: ValueQuoteStyle;
 }
 
 interface InternalOptions {
@@ -30,11 +50,15 @@ interface InternalOptions {
   keepWhitespaceInside: Set<string>;
   lastText: TextElement;
   newLineBefore: Set<string>;
+  normalizeAttributeSpacing: boolean;
   removeNewLineBefore: Set<string>;
   removeUnclosedTags: boolean;
+  spaceAroundAttributeEquals: boolean;
   tabSize: number;
   trimDocument: boolean;
   useTabCharacters?: boolean;
+  valueQuoting?: ValueQuoting;
+  valueQuoteStyle?: ValueQuoteStyle;
 }
 
 const DEFAULT_OPTIONS: InternalOptions = {
@@ -51,11 +75,15 @@ const DEFAULT_OPTIONS: InternalOptions = {
   keepWhitespaceInside: new Set(['/', 'pre', 'span', 'textarea']),
   lastText: null,
   newLineBefore: new Set(['body', 'div', 'form', 'h1', 'h2', 'h3', 'p']),
+  normalizeAttributeSpacing: true,
   removeNewLineBefore: new Set(['br']),
   removeUnclosedTags: true,
+  spaceAroundAttributeEquals: false,
   tabSize: 8,
   trimDocument: true,
-  useTabCharacters: true
+  useTabCharacters: true,
+  valueQuoting: ValueQuoting.ALWAYS_QUOTE,
+  valueQuoteStyle: ValueQuoteStyle.PREFER_DOUBLE
 };
 
 export function formatHtml(node: DomNode, options?: HtmlFormatOptions): void {
@@ -182,23 +210,39 @@ function formatAttributes(node: DomNode, indent: number, options: InternalOption
 
     const value = node.values[i];
 
-    if (/^[\da-z-._]+$/.test(value))
-      node.quotes[i] = '';
-    else if (value && !/"/.test(value))
-      node.quotes[i] = '"';
+    if ((value || node.quotes[i]) && options.valueQuoting !== ValueQuoting.LEAVE_AS_IS) {
+      if (options.valueQuoting === ValueQuoting.UNQUOTE_SIMPLE_VALUES && SIMPLE_VALUE.test(value) ||
+          options.valueQuoting === ValueQuoting.UNQUOTE_INTEGERS && /^\d+$/.test(value))
+        node.quotes[i] = '';
+      else if (options.valueQuoteStyle === ValueQuoteStyle.DOUBLE ||
+               (options.valueQuoteStyle === ValueQuoteStyle.PREFER_DOUBLE && (!/"/.test(value) || /'/.test(value)))) {
+        node.quotes[i] = '"';
+        value.replace(/"/g, '&quot;');
+      }
+      else if (options.valueQuoteStyle === ValueQuoteStyle.SINGLE ||
+               (options.valueQuoteStyle === ValueQuoteStyle.PREFER_SINGLE && (!/'/.test(value) || /"/.test(value)))) {
+        node.quotes[i] = "'";
+        value.replace(/'/g, '&apos;');
+      }
+    }
 
     let spacing = node.spacing[i];
 
-    if (/[\r\n]/.test(spacing)) {
-      const extraIndent = options.alignAttributes ? columnWidth(node.tag) + 2
-        : options.continuationIndent;
+    if (options.normalizeAttributeSpacing) {
+      if (/[\r\n]/.test(spacing)) {
+        const extraIndent = options.alignAttributes ? columnWidth(node.tag) + 2
+          : options.continuationIndent;
 
-      spacing = spacing.replace(/[^\r\n]/g, '') + ' '.repeat(indent * options.indent + extraIndent);
+        spacing = spacing.replace(/[^\r\n]/g, '') + ' '.repeat(indent * options.indent + extraIndent);
+      }
+      else
+        spacing = ' ';
+
+      node.spacing[i] = tabify(spacing, options);
+
+      if (node.equals[i])
+        node.equals[i] = options.spaceAroundAttributeEquals ? ' = ' : '=';
     }
-    else
-      spacing = ' ';
-
-    node.spacing[i] = tabify(spacing, options);
   }
 }
 

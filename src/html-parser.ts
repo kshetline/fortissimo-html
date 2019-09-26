@@ -4,6 +4,7 @@ import { isAttributeNameChar, isEol, isMarkupStart, isPCENChar, isWhitespace } f
 import { CData, ClosureState, CommentElement, CQ, DeclarationElement, DocType, DomModel, DomNode, OQ, ProcessingElement, TextElement, UnmatchedClosingTag } from './dom';
 
 export interface HtmlParserOptions {
+  emptyEndTag?: boolean;
   eol?: string | boolean;
   xmlMode?: boolean;
 }
@@ -46,6 +47,7 @@ const TEXT_STARTERS = new Set<State>([State.OUTSIDE_MARKUP, State.IN_SCRIPT_ELEM
                                       State.IN_TEXT_AREA_ELEMENT]);
 
 const DEFAULT_OPTIONS: HtmlParserOptions = {
+  emptyEndTag: true,
   eol: '\n',
   xmlMode: false,
 };
@@ -322,6 +324,7 @@ export class HtmlParser {
           }
 
           this.collectedSpace = '';
+          this.currentTag = this.currentTagLc = '';
           this.state = State.AT_MARKUP_START;
         break;
 
@@ -362,9 +365,16 @@ export class HtmlParser {
         break;
 
         case State.AT_END_TAG_START:
-          await this.gatherTagName(ch);
+          if (ch === '>') {
+            this.currentTag = this.currentTagLc = '';
+            this.putBack(ch);
+          }
+          else {
+            await this.gatherTagName(ch);
+            this.collectedSpace = '';
+          }
+
           this.state = State.IN_END_TAG;
-          this.collectedSpace = '';
         break;
 
         case State.IN_END_TAG:
@@ -386,6 +396,14 @@ export class HtmlParser {
               this.pop(this.currentTagLc, `</${this.currentTag}${this.pendingSource}`);
               this.doEndTagCallback(this.currentTag, this.pendingSource);
             }
+          }
+          else if (!this.currentTag) {
+            ++this.parseResults.errors;
+            this.callback('error', 'Empty end tag', this.line, this.column, this.pendingSource);
+            this.dom.addChild(new UnmatchedClosingTag(this.pendingSource, this.line, this.column));
+            this.collectedSpace = '';
+            this.pendingSource = '';
+            this.state = State.OUTSIDE_MARKUP;
           }
           else {
             this.pop(this.currentTagLc, `</${this.currentTag}${this.collectedSpace}>`);
@@ -673,7 +691,7 @@ export class HtmlParser {
         this.dom.getCurrentNode().badTerminator = '';
         this.callback('error', `Unexpected end of <${this.currentTag}> tag`, this.line, this.column);
       }
-      else if (this.state === State.IN_END_TAG) {
+      else if (this.state === State.AT_END_TAG_START || this.state === State.IN_END_TAG) {
         this.callback('error', 'Unexpected end of file in end tag', this.line, this.column, this.pendingSource);
         this.dom.addChild(new UnmatchedClosingTag(this.pendingSource, this.line, this.column));
         this.collectedSpace = '';
@@ -871,7 +889,7 @@ export class HtmlParser {
       if (ch === '<') {
         const ch2 = this.getChar() || await this.getNextChunkChar();
 
-        if (ch2 === '/') {
+        if (ch2 === '/' && !this.options.emptyEndTag) {
           const ch3 = this.getChar() || await this.getNextChunkChar();
 
           if (ch3 !== '/' && isMarkupStart(ch3)) {

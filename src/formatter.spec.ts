@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import fs from 'fs';
 import { HtmlParser } from './html-parser';
 import { DomNode } from './dom';
-import { formatHtml } from './formatter';
+import { formatHtml, ValueQuoting } from './formatter';
 import { stylizeHtml } from './stylizer';
 
 describe('formatter', () => {
@@ -15,7 +15,11 @@ describe('formatter', () => {
   });
 
   it('should format HTML', () => {
-    formatHtml(dom, { indent: 2, continuationIndent: 4 });
+    formatHtml(dom, {
+      indent: 2,
+      continuationIndent: 4,
+      valueQuoting: ValueQuoting.UNQUOTE_SIMPLE_VALUES
+    });
 
     try {fs.mkdirSync('./test-output'); } catch (err) {}
     fs.writeFileSync('./test-output/sample-reformatted.html', stylizeHtml(dom,
