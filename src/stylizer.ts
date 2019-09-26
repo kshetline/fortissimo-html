@@ -200,6 +200,7 @@ function generateCss(options: HtmlStyleOptions) {
     overflow-x: visible;
     width: 0;
   }
+
 `;
 
   COLORS.forEach(color => {

@@ -15,11 +15,11 @@ describe('formatter', () => {
   });
 
   it('should format HTML', () => {
-    formatHtml(dom);
+    formatHtml(dom, { indent: 2, continuationIndent: 4 });
 
     try {fs.mkdirSync('./test-output'); } catch (err) {}
     fs.writeFileSync('./test-output/sample-reformatted.html', stylizeHtml(dom,
-      { showWhitespace: true , title: 'Reformatted HTML'}), { encoding: 'utf8' });
+      { showWhitespace: true, title: 'Reformatted HTML'}), { encoding: 'utf8' });
 
     expect(true).to.be.true;
   });

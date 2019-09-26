@@ -28,6 +28,7 @@ interface InternalOptions {
   indent: number;
   inline: Set<string>;
   keepWhitespaceInside: Set<string>;
+  lastText: TextElement;
   newLineBefore: Set<string>;
   removeNewLineBefore: Set<string>;
   removeUnclosedTags: boolean;
@@ -38,16 +39,17 @@ interface InternalOptions {
 
 const DEFAULT_OPTIONS: InternalOptions = {
   alignAttributes: true,
-  continuationIndent: 4,
+  continuationIndent: 8,
   childrenNotIndented: new Set(['/', 'html', 'body', 'thead', 'tbody', 'tfoot']),
   dontBreakIfInline: new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'title']),
   endDocumentWithNewline: true,
   eol: null,
-  indent: 2,
+  indent: 4,
   inline: new Set(['a', 'abbr', 'acronym', 'b', 'basefont', 'bdo', 'big', 'br', 'cite', 'cite', 'code', 'dfn',
                    'em', 'font', 'i', 'img', 'input', 'kbd', 'label', 'q', 's', 'samp', 'select', 'small', 'span',
                    'strike', 'strong', 'sub', 'sup', 'tt', 'u', 'var']),
-  keepWhitespaceInside: new Set(['/', 'pre', 'script', 'span', 'style', 'textarea']),
+  keepWhitespaceInside: new Set(['/', 'pre', 'span', 'textarea']),
+  lastText: null,
   newLineBefore: new Set(['body', 'div', 'form', 'h1', 'h2', 'h3', 'p']),
   removeNewLineBefore: new Set(['br']),
   removeUnclosedTags: true,
@@ -99,15 +101,8 @@ function formatNode(node: DomNode, options: InternalOptions, indent: number): vo
 
   const delta = options.childrenNotIndented.has(node.tagLc) ? 0 : 1;
   const keepWhitespaceInside = options.keepWhitespaceInside.has(node.tagLc);
+  const specialText = (node.tagLc === 'script' || node.tagLc === 'style');
 
-  if (!keepWhitespaceInside && !node.contentInline) {
-    for (const elem of children) {
-      if (elem instanceof TextElement)
-        elem.content = elem.content.replace(/[ \t\f]+/g, '');
-    }
-  }
-
-  let prevText: TextElement;
   let pre_indented = -2;
 
   for (let i = 0; i < children.length; ++i) {
@@ -117,64 +112,61 @@ function formatNode(node: DomNode, options: InternalOptions, indent: number): vo
       formatAttributes(elem, indent + delta, options);
 
       if (/[\r\n][ \t\f]*>/.test(elem.endTagText || '')) {
-        const $ = /(.*)[\r\n][ \t\f]*>/m.exec(elem.endTagText);
+        const $ = /(.*)[\r\n][ \t\f]*>/s.exec(elem.endTagText);
 
         elem.endTagText = $[1] + options.eol + tabify(' '.repeat((indent + delta) * options.indent), options) + '>';
         pre_indented = i;
       }
 
-      if (prevText && options.removeNewLineBefore.has(elem.tagLc)) {
-        prevText.content = prevText.content.replace(/\s+$/, '');
-
-        if (!prevText.content)
-          children.splice(i--, 1);
-      }
-      else if (!node.contentInline && pre_indented !== i - 1) {
-        if (!prevText) {
-          prevText = new TextElement('', 0, 0, false);
-          children.splice(i++, 0, prevText);
+      if (options.lastText && options.removeNewLineBefore.has(elem.tagLc))
+        options.lastText.content = options.lastText.content.replace(/\s+$/, '');
+      else if ((options.newLineBefore.has(elem.tagLc) || !node.contentInline) && pre_indented !== i - 1) {
+        if (!options.lastText) {
+          options.lastText = new TextElement('', 0, 0, false);
+          children.splice(i++, 0, options.lastText);
         }
 
-        applyIndentation(prevText, indent + delta, options);
+        applyIndentation(options.lastText, indent + delta, options);
       }
 
+      const saveLastText = options.lastText;
+
+      options.lastText = null;
       formatNode(elem, options, indent + delta);
 
-      if (elem.closureState === ClosureState.IMPLICITLY_CLOSED &&
-          elem.children && elem.children[elem.children.length - 1] instanceof TextElement)
-        prevText = elem.children[elem.children.length - 1] as TextElement;
-      else
-        prevText = null;
+      if (!elem.children)
+        options.lastText = null;
+      else if (!options.lastText)
+        options.lastText = saveLastText;
     }
     else if (elem instanceof TextElement)
-      prevText = elem;
+      options.lastText = elem;
     else {
-      if (prevText && /[\r\n]/.test(prevText.content))
-        applyIndentation(prevText, indent + delta, options);
+      if (options.lastText && /[\r\n]/.test(options.lastText.content))
+        applyIndentation(options.lastText, indent + delta, options);
 
-      prevText = null;
+      options.lastText = null;
     }
   }
 
-  if (!node.contentInline && !keepWhitespaceInside) {
-    let last: TextElement;
-
-    if (children[children.length - 1] instanceof TextElement)
-      last = children[children.length - 1] as TextElement;
-    else {
-      last = new TextElement('', 0, 0, false);
-      children.push(last);
+  if (specialText || !node.contentInline && !keepWhitespaceInside) {
+    if (!options.lastText) {
+      options.lastText = new TextElement('', 0, 0, false);
+      children.push(options.lastText);
     }
 
     if (node.closureState === ClosureState.EXPLICITLY_CLOSED) {
-      const indentation = tabify(' '.repeat(indent * 2), options);
-      const $ = /^(.*(?:\r\n|\n|\r))[ \t\f]*$/s.exec(last.content);
+      const indentation = tabify(' '.repeat(indent * options.indent), options);
+      const $ = /^(.*(?:\r\n|\n|\r))[ \t\f]*$/s.exec(options.lastText.content);
 
-      last.content = ($ && $[1] || last.content + '\n') + indentation;
+      options.lastText.content = ($ && $[1] || options.lastText.content + options.eol) + indentation;
     }
     else
-      last.content = last.content.replace(/(?:\r\n|\n|\r)[ \t\f]*$/, '');
+      options.lastText.content = options.lastText.content.replace(/(?:\r\n|\n|\r)[ \t\f]*$/, '');
   }
+
+  if (node.closureState !== ClosureState.IMPLICITLY_CLOSED)
+    options.lastText = null;
 }
 
 function applyIndentation(elem: DomElement, indent: number, options: InternalOptions): void {
@@ -201,7 +193,7 @@ function formatAttributes(node: DomNode, indent: number, options: InternalOption
       const extraIndent = options.alignAttributes ? columnWidth(node.tag) + 2
         : options.continuationIndent;
 
-      spacing = spacing.replace(/[^\r\n]/g, '') + ' '.repeat(indent * 2 + extraIndent);
+      spacing = spacing.replace(/[^\r\n]/g, '') + ' '.repeat(indent * options.indent + extraIndent);
     }
     else
       spacing = ' ';
