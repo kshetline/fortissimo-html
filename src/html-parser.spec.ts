@@ -164,6 +164,21 @@ describe('html-parser', () => {
     expect(reconstituted).contains('Mañana');
   });
 
+  it('should detect incorrect decoding by character patterns', async () => {
+    const encodings = ['utf-16be', 'utf-16le', 'utf-32be', 'utf-32le'];
+
+    for (const encoding of encodings) {
+      const content = fs.readFileSync(`./test/sample-${encoding}.html`, 'utf-8');
+      const parser = new HtmlParser();
+
+      await parser.on('encoding', (enc, normalized, explicit) => {
+        expect(normalized).equals(encoding.replace('-', ''));
+        expect(explicit).to.be.false;
+        return true;
+      }).parse(content);
+    }
+  });
+
   it('can stop the parser', async () => {
     const parser = new HtmlParser();
     let results: ParseResults;

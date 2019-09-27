@@ -271,6 +271,11 @@ export class HtmlParser {
     this.parseResults = new ParseResults();
     this.parseResults.domRoot = this.dom.getRoot();
 
+    this.checkEncoding(this.htmlSource);
+
+    if (this.stopped)
+      return Promise.resolve(null);
+
     return new Promise<ParseResults>(resolve => {
       this.yieldTime = yieldTime;
       this.parsingResolver = results => {
@@ -289,6 +294,26 @@ export class HtmlParser {
 
       setTimeout(parse);
     });
+  }
+
+  private checkEncoding(firstChars: string): void {
+    let encoding: string;
+
+    if (/^(\x00\x00\xFE\xFF|\x00\x00\x00[\x01-\xFF]\x00\x00\x00[\x01-\xFF])/.test(firstChars))
+      encoding = 'UTF-32BE';
+    else if (/^(\xFF\xFE\x00\x00|[\x01-\xFF]\x00\x00\x00[\x01-\xFF]\x00\x00\x00)/.test(firstChars))
+      encoding = 'UTF-32LE';
+    else if (/^(\xFE\xFF|\x00[\x01-\xFF]\x00[\x01-\xFF])/.test(firstChars))
+      encoding = 'UTF-16BE';
+    else if (/^(\xFF\xFE|[\x01-\xFF]\x00[\x01-\xFF]\x00)/.test(firstChars))
+      encoding = 'UTF-16LE';
+
+    if (encoding) {
+      const bailout = this.callback('encoding', encoding, encoding.toLowerCase().replace('-', ''), false);
+
+      if (bailout)
+        this.stop();
+    }
   }
 
   private async parseLoop(): Promise<void> {
