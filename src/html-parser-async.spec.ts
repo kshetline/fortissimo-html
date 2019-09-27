@@ -1,7 +1,8 @@
 import { expect } from 'chai';
 import fs from 'fs';
 import iconv from 'iconv-lite';
-import { HtmlParser, ParseResults } from './html-parser';
+import { ParseResults } from './html-parser';
+import { HtmlParserAsync } from './html-parser-async';
 import { DocType } from './dom';
 
 export const SMALL_SAMPLE =
@@ -12,13 +13,13 @@ export const SMALL_SAMPLE =
 </html>
 `;
 
-describe('html-parser', () => {
-  it('should properly parse HTML', () => {
+describe('html-parser-async', () => {
+  it('should properly parse HTML', async () => {
     const content = fs.readFileSync('./test/sample.html', 'utf-8');
-    const parser = new HtmlParser();
+    const parser = new HtmlParserAsync();
     let docType: DocType;
     let errors = 0;
-    const results = parser
+    const results = await parser
       .on('doctype', dt => docType = dt)
       .on('error', () => ++errors)
       .parse(content);
@@ -33,11 +34,11 @@ describe('html-parser', () => {
     expect(errors).equals(results.errors);
   });
 
-  it('should properly parse XHTML', () => {
+  it('should properly parse XHTML', async () => {
     const content = fs.readFileSync('./test/sample-w3c.html', 'utf-8');
-    const parser = new HtmlParser();
+    const parser = new HtmlParserAsync();
     let docType: DocType;
-    const results = parser.on('doctype', dt => docType = dt).parse(content);
+    const results = await parser.on('doctype', dt => docType = dt).parse(content);
     const reconstituted = results.domRoot.toString();
 
     expect(content).equals(reconstituted);
@@ -46,11 +47,14 @@ describe('html-parser', () => {
     expect(docType && docType.variety).equals('strict');
   });
 
-  it('should properly reconstruct HTML from specific callbacks', () => {
-    const content = fs.readFileSync('./test/sample-w3c.html', 'utf-8');
-    const parser = new HtmlParser();
+  it('should properly reconstruct HTML from specific callbacks', async () => {
+    const rawStream = fs.createReadStream('./test/sample.html');
+    const stream = rawStream.pipe(iconv.decodeStream('utf-8', { stripBOM: true }));
+    const parser = new HtmlParserAsync();
+    let content = '';
     let rebuilt = '';
-    let completed = false;
+    let streamDone: () => void;
+    let bytes = 0;
 
     parser
       .on('attribute', (leading, name, equals, value, quote) => {
@@ -66,7 +70,7 @@ describe('html-parser', () => {
         rebuilt += '<!--' + comment + (terminated ? '-->' : '');
       })
       .on('completion', () => {
-        completed = true;
+        streamDone();
       })
       .on('declaration', (depth, declaration, terminated) => {
         rebuilt += '<!' + declaration + (terminated ? '>' : '');
@@ -89,52 +93,86 @@ describe('html-parser', () => {
       })
       .on('text', (depth, text) => {
         rebuilt += text;
-      })
-      .parse(content);
+      });
+
+    await new Promise<void>(resolve => {
+      streamDone = () => {
+        stream.end();
+        resolve();
+      };
+
+      rawStream.on('data', data => bytes += data.length);
+
+      stream.on('data', data => {
+        content += data;
+        parser.parseChunk(data);
+      });
+      stream.on('end', () => parser.parseChunk(null));
+    });
 
     expect(content).equals(rebuilt);
-    expect(completed).to.be.true;
   });
 
-  it('should properly reconstruct HTML from generic callbacks', () => {
-    const content = fs.readFileSync('./test/sample.html', 'utf-8');
-    const parser = new HtmlParser();
+  it('should properly reconstruct HTML from generic callbacks', async () => {
+    const rawStream = fs.createReadStream('./test/sample.html');
+    const stream = rawStream.pipe(iconv.decodeStream('utf-8', { stripBOM: true }));
+    const parser = new HtmlParserAsync();
+    let content = '';
     let rebuilt = '';
+    let streamDone: () => void;
+    let bytes = 0;
 
     parser
+      .on('completion', () => {
+        streamDone();
+      })
       .on('generic', (depth, text) => {
         rebuilt += text;
-      })
-      .parse(content);
+      });
+
+    await new Promise<void>(resolve => {
+      streamDone = () => {
+        stream.end();
+        resolve();
+      };
+
+      rawStream.on('data', data => bytes += data.length);
+
+      stream.on('data', data => {
+        content += data;
+        parser.parseChunk(data);
+      });
+      stream.on('end', () => parser.parseChunk(null));
+    });
 
     expect(content).equals(rebuilt);
   });
 
-  it('should handle switch from wrong encoding to correct encoding', () => {
+  it('should handle switch from wrong encoding to correct encoding', async () => {
     let content = fs.readFileSync('./test/sample-iso-8859-1.html', 'utf-8');
-    const parser = new HtmlParser();
+    const parser = new HtmlParserAsync();
     let results: ParseResults;
     let encoding = 'utf8';
     let reconstituted: string;
 
-    parser.on('encoding', enc => { encoding = enc; return true; }).parse(content);
+    await parser.on('encoding', enc => { encoding = enc; return true; }).parse(content);
     parser.off('encoding');
     content = iconv.decode(fs.readFileSync('./test/sample-iso-8859-1.html'), encoding);
-    results = parser.parse(content);
+    results = await parser.parse(content);
     reconstituted = results.toString();
 
     expect(content).equals(reconstituted);
     expect(reconstituted).contains('Mañana');
   });
 
-  it('should detect incorrect decoding by character patterns', () => {
+  it('should detect incorrect decoding by character patterns', async () => {
     const encodings = ['utf-16be', 'utf-16le', 'utf-32be', 'utf-32le'];
 
     for (const encoding of encodings) {
       const content = fs.readFileSync(`./test/sample-${encoding}.html`, 'utf-8');
-      const parser = new HtmlParser();
+      const parser = new HtmlParserAsync();
 
-      parser.on('encoding', (enc, normalized, explicit) => {
+      await parser.on('encoding', (enc, normalized, explicit) => {
         expect(normalized).equals(encoding.replace('-', ''));
         expect(explicit).to.be.false;
         return true;
@@ -142,39 +180,53 @@ describe('html-parser', () => {
     }
   });
 
-  it('can stop the parser', () => {
-    const parser = new HtmlParser();
+  it('can stop the parser', async () => {
+    const parser = new HtmlParserAsync();
     let results: ParseResults;
 
-    results = parser
-      .on('generic', () => parser.stop())
-      .parse(SMALL_SAMPLE);
+    setTimeout(() => parser.stop(), 100);
+    results = await parser.parseAsync();
     expect(results.stopped).to.be.true;
-    expect(results.toString()).equals('<!DOCTYPE html>');
+    expect(results.toString()).equals('');
     expect(new ParseResults().toString()).equals('');
   });
 
-  it('can reset the parser', () => {
-    const parser = new HtmlParser();
+  it('can reset the parser', async () => {
+    const parser = new HtmlParserAsync();
     let results: ParseResults;
 
-    results = parser
-      .on('generic', () => parser.reset())
-      .parse(SMALL_SAMPLE);
-    expect(results).to.be.undefined;
+    setTimeout(() => parser.reset(), 100);
+    results = await parser.parseAsync();
+    expect(results).to.be.null;
 
     parser.stop();
     expect(true).to.be.ok;
   });
 
-  it('should allow </ as plain text', () => {
+  it('should handle waiting for input and characters split between chunks', async () => {
+    const content = fs.readFileSync('./test/sample-iso-8859-1.html', 'utf-8') +
+      '@😀\r\n\r';
+    const parser = new HtmlParserAsync({ eol: false });
+    let results: ParseResults;
+    let reconstituted: string;
+    let index = 0;
+
+    results = await parser.on('request-data', () => {
+      parser.parseChunk(content.charAt(index++), index === content.length);
+    }).parseAsync();
+    reconstituted = results.domRoot.toString();
+
+    expect(content).equals(reconstituted);
+  });
+
+  it('should allow </ as plain text', async () => {
     const endBody = SMALL_SAMPLE.indexOf('</body>');
     const content = SMALL_SAMPLE.substr(0, endBody) + '</> </ >' + SMALL_SAMPLE.substr(endBody);
-    const parser = new HtmlParser({ emptyEndTag: false });
+    const parser = new HtmlParserAsync({ emptyEndTag: false });
     let rebuilt = '';
     let results: ParseResults;
 
-    results = parser
+    results = await parser
       .on('generic', (depth, text) => {
         rebuilt += text;
       })
@@ -184,7 +236,7 @@ describe('html-parser', () => {
     expect(results.errors).equals(0);
   });
 
-  it('should handle a variety of unexpected EOF conditions', () => {
+  it('should handle a variety of unexpected EOF conditions', async () => {
     const endings = [
       '<!--', '<!--x', '<!someth..', '<?php', '<math><annotation><![CDATA[stuff', '<div',
       '<span foo', '<span  foo =', '<span foo= "bar', '<', '</', '</a', '</a ', '</a b'
@@ -192,11 +244,11 @@ describe('html-parser', () => {
 
     for (const ending of endings)  {
       const content = SMALL_SAMPLE + ending;
-      const parser = new HtmlParser();
+      const parser = new HtmlParserAsync();
       let rebuilt = '';
       let results: ParseResults;
 
-      results = parser
+      results = await parser
         .on('generic', (depth, text) => {
           rebuilt += text;
         })
@@ -208,30 +260,30 @@ describe('html-parser', () => {
     }
   });
 
-  it('should handle all eol options', () => {
+  it('should handle all eol options', async () => {
     const content = 'a\nb\rc\r\nd';
     let results: ParseResults;
 
-    results = new HtmlParser({ eol: false }).parse(content);
+    results = await new HtmlParserAsync({ eol: false }).parse(content);
     expect(results.domRoot.toString()).equals(content);
-    results = new HtmlParser({ eol: '?' }).parse(content);
+    results = await new HtmlParserAsync({ eol: '?' }).parse(content);
     expect(results.domRoot.toString()).equals(content);
 
-    results = new HtmlParser({ eol: true }).parse(content);
+    results = await new HtmlParserAsync({ eol: true }).parse(content);
     expect(results.domRoot.toString()).equals('a\nb\nc\nd');
-    results = new HtmlParser({ eol: 'n' }).parse(content);
+    results = await new HtmlParserAsync({ eol: 'n' }).parse(content);
     expect(results.domRoot.toString()).equals('a\nb\nc\nd');
-    results = new HtmlParser({ eol: '\n' }).parse(content);
+    results = await new HtmlParserAsync({ eol: '\n' }).parse(content);
     expect(results.domRoot.toString()).equals('a\nb\nc\nd');
 
-    results = new HtmlParser({ eol: 'r' }).parse(content);
+    results = await new HtmlParserAsync({ eol: 'r' }).parse(content);
     expect(results.domRoot.toString()).equals('a\rb\rc\rd');
-    results = new HtmlParser({ eol: '\r' }).parse(content);
+    results = await new HtmlParserAsync({ eol: '\r' }).parse(content);
     expect(results.domRoot.toString()).equals('a\rb\rc\rd');
 
-    results = new HtmlParser({ eol: 'rn' }).parse(content);
+    results = await new HtmlParserAsync({ eol: 'rn' }).parse(content);
     expect(results.domRoot.toString()).equals('a\r\nb\r\nc\r\nd');
-    results = new HtmlParser({ eol: '\r\n' }).parse(content);
+    results = await new HtmlParserAsync({ eol: '\r\n' }).parse(content);
     expect(results.domRoot.toString()).equals('a\r\nb\r\nc\r\nd');
   });
 });
