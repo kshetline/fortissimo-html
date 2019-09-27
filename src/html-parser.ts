@@ -433,8 +433,6 @@ export class HtmlParser {
               this.pop(end.length > 1 ? null : undefined);
               this.state = State.OUTSIDE_MARKUP;
             }
-            else if (this.xmlMode)
-              this.state = State.OUTSIDE_MARKUP;
             else if (this.currentTagLc === 'script')
               this.state = State.IN_SCRIPT_ELEMENT;
             else if (this.currentTagLc === 'style')
