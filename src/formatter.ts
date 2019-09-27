@@ -1,5 +1,5 @@
 import { ClosureState, DomElement, DomNode, TextElement } from './dom';
-import { columnWidth } from './characters';
+import { columnWidth, EntityStyle, EscapeOptions, escapeToEntities, reencodeEntities, ReencodeOptions, TargetEncoding, unescapeEntities } from './characters';
 
 export enum ValueQuoting {
   ALWAYS_QUOTE,
@@ -17,7 +17,7 @@ export enum ValueQuoteStyle {
   SINGLE
 }
 
-export interface HtmlFormatOptions {
+export interface HtmlFormatOptions extends EscapeOptions {
   alignAttributes?: boolean;
   continuationIndent?: number;
   childrenNotIndented?: string[];
@@ -34,6 +34,7 @@ export interface HtmlFormatOptions {
   spaceAroundAttributeEquals?: boolean;
   tabSize?: number;
   trimDocument?: boolean;
+  undoUnneededEntities?: boolean;
   useTabCharacters?: boolean;
   valueQuoting?: ValueQuoting;
   valueQuoteStyle?: ValueQuoteStyle;
@@ -46,6 +47,7 @@ interface InternalOptions {
   dontBreakIfInline: Set<string>;
   endDocumentWithNewline: boolean;
   eol: string;
+  escapeOptions: EscapeOptions;
   indent: number;
   inline: Set<string>;
   instantiateSyntheticNodes: boolean;
@@ -70,6 +72,12 @@ const DEFAULT_OPTIONS: InternalOptions = {
   dontBreakIfInline: new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'title']),
   endDocumentWithNewline: true,
   eol: null,
+  escapeOptions: {
+    entityStyle: EntityStyle.SHORTEST,
+    reencode: ReencodeOptions.DONT_CHANGE,
+    target: TargetEncoding.UNICODE,
+    undoUnneededEntities: false
+  },
   indent: 4,
   inline: new Set(['a', 'abbr', 'acronym', 'b', 'basefont', 'bdo', 'big', 'br', 'cite', 'cite', 'code', 'dfn',
                    'em', 'font', 'i', 'img', 'input', 'kbd', 'label', 'q', 's', 'samp', 'select', 'small', 'span',
@@ -86,7 +94,7 @@ const DEFAULT_OPTIONS: InternalOptions = {
   trimDocument: true,
   useTabCharacters: true,
   valueQuoting: ValueQuoting.ALWAYS_QUOTE,
-  valueQuoteStyle: ValueQuoteStyle.PREFER_DOUBLE
+  valueQuoteStyle: ValueQuoteStyle.PREFER_DOUBLE,
 };
 
 export function formatHtml(node: DomNode, options?: HtmlFormatOptions): void {
@@ -174,8 +182,16 @@ function formatNode(node: DomNode, options: InternalOptions, indent: number): vo
       else if (options.lastText === null)
         options.lastText = saveLastText;
     }
-    else if (elem instanceof TextElement)
+    else if (elem instanceof TextElement) {
       options.lastText = elem;
+
+      if (options.escapeOptions.reencode !== ReencodeOptions.DONT_CHANGE) {
+        if (elem.possibleEntities)
+          elem.content = reencodeEntities(elem.content, options.escapeOptions);
+        else
+          elem.content = escapeToEntities(elem.content, options.escapeOptions);
+      }
+    }
     else {
       if (options.lastText && /[\r\n]/.test(options.lastText.content))
         applyIndentation(options.lastText, indent + delta, options);
@@ -234,6 +250,9 @@ function formatAttributes(node: DomNode, indent: number, options: InternalOption
         node.values[i] = value.replace(/'/g, '&apos;');
       }
     }
+
+    if (options.escapeOptions.reencode !== ReencodeOptions.DONT_CHANGE)
+      node.values[i] = reencodeEntities(node.values[i], options.escapeOptions, true);
 
     let spacing = node.spacing[i];
 
@@ -337,6 +356,13 @@ function processOptions(options: HtmlFormatOptions): InternalOptions {
   opts.keepWhitespaceInside = applyTagList(opts.keepWhitespaceInside, options.keepWhitespaceInside);
   opts.newLineBefore = applyTagList(opts.newLineBefore, options.newLineBefore);
   opts.removeNewLineBefore = applyTagList(opts.removeNewLineBefore, options.removeNewLineBefore);
+
+  opts.escapeOptions = Object.assign({}, opts.escapeOptions);
+
+  Object.keys(opts.escapeOptions).forEach(subOption => {
+    if (subOption in options)
+      (opts.escapeOptions as any)[subOption] = (options as any)[subOption];
+  });
 
   return opts;
 }

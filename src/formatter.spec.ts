@@ -5,6 +5,7 @@ import { DomNode } from './dom';
 import { formatHtml, ValueQuoteStyle, ValueQuoting } from './formatter';
 import { stylizeHtml } from './stylizer';
 import { SMALL_SAMPLE } from './html-parser.spec';
+import { ReencodeOptions, TargetEncoding } from './characters';
 
 describe('formatter', () => {
   const content = fs.readFileSync('./test/sample.html', 'utf-8');
@@ -22,6 +23,9 @@ describe('formatter', () => {
       childrenNotIndented: ['-thead', '-tbody', '-tfoot'],
       continuationIndent: 4,
       instantiateSyntheticNodes: true,
+      reencode: ReencodeOptions.MINIMAL,
+      target: TargetEncoding.EIGHT_BIT,
+      undoUnneededEntities: true,
       valueQuoting: ValueQuoting.UNQUOTE_SIMPLE_VALUES
     });
 
@@ -31,7 +35,7 @@ describe('formatter', () => {
 
     reformatted = dom.toString();
 
-    expect(reformatted).contains('foo="=bar/baz&"');
+    expect(reformatted).contains('foo="=bar/baz&amp;"');
     expect(reformatted).contains(' class=inner-wrapper ');
   });
 

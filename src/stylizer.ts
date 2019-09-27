@@ -254,7 +254,7 @@ function markup(s: string, prefix: string, qlass: string, markWhitespace: boolea
   else if (checkInvalid) {
     s = replaceIsolatedSurrogates(s);
 
-    return s.split(/([\x00-\x08\x0B\x0E-\x1F\x7F-\x9F]+)/).map((match, index) => {
+    return s.split(/([\x00-\x08\x0B\x0E-\x1F\x7F-\x9F\uFFFD]+)/).map((match, index) => {
       if (index % 2 === 1)
         return markup('�'.repeat(match.length), prefix, 'invalid', false, false, false);
       else {
@@ -297,10 +297,12 @@ function getEntityClass(entity: string, forAttribValue: boolean): string {
   let cp: number;
 
   if (entity.toLowerCase().startsWith('#x'))
-    return isNaN(cp = parseInt(entity.substr(2), 16)) || !isValidEntityCodepoint(cp) ? 'error' : bestCase;
+    return isNaN(cp = parseInt(entity.substr(2), 16)) ||
+      !isValidEntityCodepoint(cp) ? 'error' : (cp === 0xFFFD ? 'invalid' : bestCase);
 
   if (entity.toLowerCase().startsWith('#'))
-    return isNaN(cp = parseInt(entity.substr(1), 10)) || !isValidEntityCodepoint(cp) ? 'error' : bestCase;
+    return isNaN(cp = parseInt(entity.substr(1), 10)) ||
+      !isValidEntityCodepoint(cp) ? 'error' : (cp === 0xFFFD ? 'invalid' : bestCase);
 
   return isKnownNamedEntity(entity) ? 'entity' : 'warning';
 }

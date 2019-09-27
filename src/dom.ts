@@ -471,7 +471,7 @@ export class DomModel {
     if (!children || this.xmlMode)
       return;
 
-    this.insertRowsWhereNeeded(table);
+    DomModel.insertRowsWhereNeeded(table);
 
     const sections = new Set<string>();
 
@@ -479,7 +479,7 @@ export class DomModel {
       if (elem instanceof DomNode) {
         if (/^(thead|tbody|tfoot)$/.test(elem.tagLc)) {
           sections.add(elem.tagLc);
-          this.insertRowsWhereNeeded(elem);
+          DomModel.insertRowsWhereNeeded(elem);
         }
       }
     }
@@ -510,7 +510,7 @@ export class DomModel {
     }
   }
 
-  private insertRowsWhereNeeded(node: DomNode): void {
+  private static insertRowsWhereNeeded(node: DomNode): void {
     const children = node.children;
 
     if (!children)

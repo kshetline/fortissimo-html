@@ -1,9 +1,11 @@
 import * as entitiesAsJson from './entities.json';
 
-export enum EntityStyle { DECIMAL, HEX, NUMERIC_SHORTEST, NAMED_OR_DECIMAL, NAMED_OR_HEX, NAMED_OR_SHORTEST, SHORTEST}
+export enum EntityStyle { DECIMAL, HEX, NUMERIC_SHORTEST, NAMED_OR_DECIMAL, NAMED_OR_HEX,
+  NAMED_OR_SHORTEST, SHORTEST}
 const ES = EntityStyle;
 
-export enum ReencodeOptions { DONT_CHANGE, REPAIR_ONLY, LOOSE_MINIMAL, MINIMAL, NAMED_ENTITIES }
+export enum ReencodeOptions { DONT_CHANGE, REPAIR_ONLY, LOOSE_MINIMAL, MINIMAL,
+  NAMED_ENTITIES }
 const RO = ReencodeOptions;
 
 export enum TargetEncoding { SEVEN_BIT, EIGHT_BIT, UNICODE }
@@ -13,12 +15,13 @@ export interface EscapeOptions {
   entityStyle?: EntityStyle;
   reencode?: ReencodeOptions;
   target?: TargetEncoding;
+  undoUnneededEntities?: boolean;
 }
 
 const DEFAULT_ESCAPE_OPTIONS: EscapeOptions = {
-  entityStyle: EntityStyle.SHORTEST,
-  reencode: ReencodeOptions.MINIMAL,
-  target: TargetEncoding.UNICODE
+  entityStyle: ES.SHORTEST,
+  reencode: RO.MINIMAL,
+  target: TE.UNICODE
 };
 
 let entities: Record<string, string> = entitiesAsJson;
@@ -201,6 +204,36 @@ export function unescapeEntities(s: string, forAttributeValue = false): string {
   return sb.join('');
 }
 
+export function reencodeEntities(s: string, options: EscapeOptions, forAttributeValue = false): string {
+  const sb: string[] = [];
+
+  separateEntities(s).forEach((value, index) => {
+    if (index % 2 === 0 || (forAttributeValue && !value.endsWith(';')) || !isValidEntity(value))
+      sb.push(escapeToEntities(value, options));
+    else {
+      if (!value.endsWith(';'))
+        value += ';';
+
+      if (options.reencode !== RO.REPAIR_ONLY) {
+        const chars = resolveEntity(value);
+
+        if (options.undoUnneededEntities && !/&(amp|lt|gt|quot|apos);/.test(value) &&
+            chars > ' ' && !isOtherWhitespace(chars) &&
+            (options.target === TargetEncoding.UNICODE ||
+             (options.target === TargetEncoding.EIGHT_BIT && /^[\x00-\xFF]+$/.test(value)) ||
+             (options.target === TargetEncoding.SEVEN_BIT && /^[\x00-\x7E]+$/.test(value))))
+          value = chars;
+        else
+          value = escapeToEntities(chars, options);
+      }
+
+      sb.push(value);
+    }
+  });
+
+  return sb.join('');
+}
+
 export function separateEntities(s: string): string[] {
   return s ? s.split(/(&(?:amp(?:;?)|#\d+(?:;|\b|(?=\D))|#x[0-9a-f]+(?:;|\b|(?=[^0-9a-f]))|[0-9a-z]+(?:;|\b|(?=[^0-9a-z]))))/i) : [s];
 }
@@ -211,6 +244,24 @@ export function isKnownNamedEntity(entity: string): boolean {
 
   if (entity.endsWith(';'))
     entity = entity.substr(0, entity.length - 1);
+
+  return entity in entities;
+}
+
+export function isValidEntity(entity: string): boolean {
+  if (entity.startsWith('&'))
+    entity = entity.substr(1);
+
+  if (entity.endsWith(';'))
+    entity = entity.substr(0, entity.length - 1);
+
+  let cp: number;
+
+  if (entity.toLowerCase().startsWith('#x'))
+    return !isNaN(cp = parseInt(entity.substr(2), 16)) && isValidEntityCodepoint(cp);
+
+  if (entity.toLowerCase().startsWith('#'))
+    return !isNaN(cp = parseInt(entity.substr(1), 10)) && isValidEntityCodepoint(cp);
 
   return entity in entities;
 }
