@@ -1,5 +1,4 @@
 import { processMillis } from './platform-specifics';
-import { VOID_ELEMENTS } from './elements';
 import { isAttributeNameChar, isMarkupStart, isPCENChar, isWhitespace } from './characters';
 import { CData, ClosureState, CommentElement, DeclarationElement, DocType, ProcessingElement, TextElement,
   UnmatchedClosingTag } from './dom';
@@ -14,9 +13,7 @@ export class HtmlParserAsync extends HtmlParser {
   private resolveNextChunk: (gotMoreChars: string) => void;
   private yieldTime = DEFAULT_YIELD_TIME;
 
-  constructor(
-    options = DEFAULT_OPTIONS
-  ) {
+  constructor(options = DEFAULT_OPTIONS) {
     super(options);
   }
 
@@ -167,11 +164,9 @@ export class HtmlParserAsync extends HtmlParser {
         break;
 
         case State.IN_END_TAG:
-         const [doBreak, invalidEnding] = this.handleEndTag(ch);
+         const invalidEnding = this.handleEndTag(ch);
 
-         if (doBreak)
-           break;
-         else if (invalidEnding) {
+         if (invalidEnding) {
            await this.gatherInvalidEndTagEndingAsync();
            this.pop(this.currentTagLc, `</${this.currentTag}${this.pendingSource}`);
            this.doEndTagCallback(this.currentTag, this.pendingSource);
@@ -191,67 +186,14 @@ export class HtmlParserAsync extends HtmlParser {
             }
           }
 
-          if (ch !== '>') {
-            if (ch === '/' && !this.xmlMode) {
-              // Most browsers seem to simply ignore stray slashes in tags which aren't followed by `>`.
-              // Here will turn it into into its own valueless attribute.
-              this.attribute = '/';
-              this.leadingSpace = this.collectedSpace;
-              this.collectedSpace = '';
-              this.dom.addAttribute('/', '', this.leadingSpace, '', '');
-              this.doAttributeCallback('', '', '');
-              this.state = State.AT_ATTRIBUTE_START;
-            }
-            else if (isAttributeNameChar(ch, !this.xmlMode)) {
-              this.leadingSpace = this.collectedSpace;
-              this.collectedSpace = '';
-              await this.gatherAttributeNameAsync(ch);
-              this.state = State.AT_ATTRIBUTE_ASSIGNMENT;
-            }
-            else {
-              this.dom.addInnerWhitespace(this.collectedSpace);
-              this.dom.getCurrentNode().badTerminator = ch;
-              this.reportError(`Syntax error in <${this.currentTag}>`);
-              break;
-            }
-          }
-          else {
-            this.dom.addInnerWhitespace(this.collectedSpace);
-            this.callback('start-tag-end', this.dom.getDepth(), this.collectedSpace, end);
+          const getAttribName = this.handleAttributeStart(ch, end);
 
-            this.collectedSpace = '';
-            this.pendingSource = '';
-            this.checkingCharset = false;
-            this.contentType = false;
-            this.pendingCharset = '';
-
-            if (end.length > 1 || (!this.xmlMode && VOID_ELEMENTS.has(this.currentTagLc))) {
-              this.pop(end.length > 1 ? null : undefined);
-              this.state = State.OUTSIDE_MARKUP;
-            }
-            else if (this.currentTagLc === 'script')
-              this.state = State.IN_SCRIPT_ELEMENT;
-            else if (this.currentTagLc === 'style')
-              this.state = State.IN_STYLE_ELEMENT;
-            else if (this.currentTagLc === 'textarea')
-              this.state = State.IN_TEXT_AREA_ELEMENT;
-            else
-              this.state = State.OUTSIDE_MARKUP;
-          }
+          if (getAttribName)
+            await this.gatherAttributeNameAsync(ch);
         break;
 
         case State.AT_ATTRIBUTE_ASSIGNMENT:
-          if (ch === '=') {
-            this.preEqualsSpace = this.collectedSpace;
-            this.collectedSpace = '';
-            this.state = State.AT_ATTRIBUTE_VALUE;
-          }
-          else {
-            this.dom.addAttribute(this.attribute, '', this.leadingSpace, '', '');
-            this.doAttributeCallback('', '', '');
-            this.putBack(ch);
-            this.state = State.AT_ATTRIBUTE_START;
-          }
+          this.handleAttributeAssignment(ch);
         break;
 
         case State.AT_ATTRIBUTE_VALUE:

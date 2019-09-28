@@ -315,11 +315,9 @@ export class HtmlParser {
         break;
 
         case State.IN_END_TAG:
-         const [doBreak, invalidEnding] = this.handleEndTag(ch);
+         const invalidEnding = this.handleEndTag(ch);
 
-         if (doBreak)
-           break;
-         else if (invalidEnding) {
+         if (invalidEnding) {
            this.gatherInvalidEndTagEnding();
            this.pop(this.currentTagLc, `</${this.currentTag}${this.pendingSource}`);
            this.doEndTagCallback(this.currentTag, this.pendingSource);
@@ -339,67 +337,14 @@ export class HtmlParser {
             }
           }
 
-          if (ch !== '>') {
-            if (ch === '/' && !this.xmlMode) {
-              // Most browsers seem to simply ignore stray slashes in tags which aren't followed by `>`.
-              // Here will turn it into into its own valueless attribute.
-              this.attribute = '/';
-              this.leadingSpace = this.collectedSpace;
-              this.collectedSpace = '';
-              this.dom.addAttribute('/', '', this.leadingSpace, '', '');
-              this.doAttributeCallback('', '', '');
-              this.state = State.AT_ATTRIBUTE_START;
-            }
-            else if (isAttributeNameChar(ch, !this.xmlMode)) {
-              this.leadingSpace = this.collectedSpace;
-              this.collectedSpace = '';
-              this.gatherAttributeName(ch);
-              this.state = State.AT_ATTRIBUTE_ASSIGNMENT;
-            }
-            else {
-              this.dom.addInnerWhitespace(this.collectedSpace);
-              this.dom.getCurrentNode().badTerminator = ch;
-              this.reportError(`Syntax error in <${this.currentTag}>`);
-              break;
-            }
-          }
-          else {
-            this.dom.addInnerWhitespace(this.collectedSpace);
-            this.callback('start-tag-end', this.dom.getDepth(), this.collectedSpace, end);
+          const getAttribName = this.handleAttributeStart(ch, end);
 
-            this.collectedSpace = '';
-            this.pendingSource = '';
-            this.checkingCharset = false;
-            this.contentType = false;
-            this.pendingCharset = '';
-
-            if (end.length > 1 || (!this.xmlMode && VOID_ELEMENTS.has(this.currentTagLc))) {
-              this.pop(end.length > 1 ? null : undefined);
-              this.state = State.OUTSIDE_MARKUP;
-            }
-            else if (this.currentTagLc === 'script')
-              this.state = State.IN_SCRIPT_ELEMENT;
-            else if (this.currentTagLc === 'style')
-              this.state = State.IN_STYLE_ELEMENT;
-            else if (this.currentTagLc === 'textarea')
-              this.state = State.IN_TEXT_AREA_ELEMENT;
-            else
-              this.state = State.OUTSIDE_MARKUP;
-          }
+          if (getAttribName)
+            this.gatherAttributeName(ch);
         break;
 
         case State.AT_ATTRIBUTE_ASSIGNMENT:
-          if (ch === '=') {
-            this.preEqualsSpace = this.collectedSpace;
-            this.collectedSpace = '';
-            this.state = State.AT_ATTRIBUTE_VALUE;
-          }
-          else {
-            this.dom.addAttribute(this.attribute, '', this.leadingSpace, '', '');
-            this.doAttributeCallback('', '', '');
-            this.putBack(ch);
-            this.state = State.AT_ATTRIBUTE_START;
-          }
+          this.handleAttributeAssignment(ch);
         break;
 
         case State.AT_ATTRIBUTE_VALUE:
@@ -674,8 +619,7 @@ export class HtmlParser {
     this.state = State.AT_ATTRIBUTE_START;
   }
 
-  protected handleEndTag(ch: string): [boolean, boolean] {
-    let doBreak = false;
+  protected handleEndTag(ch: string): boolean {
     let invalidEnding = false;
 
     if (ch !== '>') {
@@ -683,11 +627,10 @@ export class HtmlParser {
         this.putBack(ch);
         this.pop(this.currentTagLc, this.pendingSource);
         this.reportError('Syntax error in end tag');
-        doBreak = true;
       }
       else {
         if (this.atEOF())
-          return [true, false];
+          return false;
 
         ++this.parseResults.errors;
         this.callback('error', 'Syntax error in end tag', this.line, this.column, '');
@@ -708,7 +651,74 @@ export class HtmlParser {
       this.doEndTagCallback(this.currentTag, this.collectedSpace + '>');
     }
 
-    return [doBreak, invalidEnding];
+    return invalidEnding;
+  }
+
+  protected handleAttributeStart(ch: string, end: string): boolean {
+    let getAttribName = false;
+
+    if (ch !== '>') {
+      if (ch === '/' && !this.xmlMode) {
+        // Most browsers seem to simply ignore stray slashes in tags which aren't followed by `>`.
+        // Here will turn it into into its own valueless attribute.
+        this.attribute = '/';
+        this.leadingSpace = this.collectedSpace;
+        this.collectedSpace = '';
+        this.dom.addAttribute('/', '', this.leadingSpace, '', '');
+        this.doAttributeCallback('', '', '');
+        this.state = State.AT_ATTRIBUTE_START;
+      }
+      else if (isAttributeNameChar(ch, !this.xmlMode)) {
+        this.leadingSpace = this.collectedSpace;
+        this.collectedSpace = '';
+        this.state = State.AT_ATTRIBUTE_ASSIGNMENT;
+        getAttribName = true;
+      }
+      else {
+        this.dom.addInnerWhitespace(this.collectedSpace);
+        this.dom.getCurrentNode().badTerminator = ch;
+        this.reportError(`Syntax error in <${this.currentTag}>`);
+      }
+    }
+    else {
+      this.dom.addInnerWhitespace(this.collectedSpace);
+      this.callback('start-tag-end', this.dom.getDepth(), this.collectedSpace, end);
+
+      this.collectedSpace = '';
+      this.pendingSource = '';
+      this.checkingCharset = false;
+      this.contentType = false;
+      this.pendingCharset = '';
+
+      if (end.length > 1 || (!this.xmlMode && VOID_ELEMENTS.has(this.currentTagLc))) {
+        this.pop(end.length > 1 ? null : undefined);
+        this.state = State.OUTSIDE_MARKUP;
+      }
+      else if (this.currentTagLc === 'script')
+        this.state = State.IN_SCRIPT_ELEMENT;
+      else if (this.currentTagLc === 'style')
+        this.state = State.IN_STYLE_ELEMENT;
+      else if (this.currentTagLc === 'textarea')
+        this.state = State.IN_TEXT_AREA_ELEMENT;
+      else
+        this.state = State.OUTSIDE_MARKUP;
+    }
+
+    return getAttribName;
+  }
+
+  protected handleAttributeAssignment(ch: string): void {
+    if (ch === '=') {
+      this.preEqualsSpace = this.collectedSpace;
+      this.collectedSpace = '';
+      this.state = State.AT_ATTRIBUTE_VALUE;
+    }
+    else {
+      this.dom.addAttribute(this.attribute, '', this.leadingSpace, '', '');
+      this.doAttributeCallback('', '', '');
+      this.putBack(ch);
+      this.state = State.AT_ATTRIBUTE_START;
+    }
   }
 
   protected pop(tagLc: string, endTagText = '') {
