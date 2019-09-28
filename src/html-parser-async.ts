@@ -1,8 +1,8 @@
 import { processMillis } from './platform-specifics';
 import { VOID_ELEMENTS } from './elements';
 import { isAttributeNameChar, isMarkupStart, isPCENChar, isWhitespace } from './characters';
-import { CData, ClosureState, CommentElement, DeclarationElement, DocType, DomModel, DomNode, ProcessingElement,
-  TextElement, UnmatchedClosingTag } from './dom';
+import { CData, ClosureState, CommentElement, DeclarationElement, DocType, ProcessingElement, TextElement,
+  UnmatchedClosingTag } from './dom';
 import { DEFAULT_OPTIONS, HtmlParser, ParseResults, State, tagForState, TEXT_STARTERS } from './html-parser';
 
 const DEFAULT_YIELD_TIME = 50;
@@ -49,6 +49,10 @@ export class HtmlParserAsync extends HtmlParser {
     }
   }
 
+  parse(source: string): ParseResults {
+    throw new Error('Not implemented');
+  }
+
   async parseAsync(source = '', yieldTime = DEFAULT_YIELD_TIME): Promise<ParseResults> {
     return this.parseAux(source, yieldTime, !!source);
   }
@@ -83,19 +87,9 @@ export class HtmlParserAsync extends HtmlParser {
   }
 
   private async parseAux(source = '', yieldTime = DEFAULT_YIELD_TIME, isFinal = !!source): Promise<ParseResults> {
-    this.startTime = processMillis();
-    this.parserRunning = true;
-    this.htmlSource = source || '';
-    this.htmlSourceIsFinal = isFinal;
-    this.pendingSource = '';
-    this.putBacks = [];
-    this.sourceIndex = 0;
-    this.state = State.OUTSIDE_MARKUP;
-    this.dom = new DomModel();
-    this.parseResults = new ParseResults();
-    this.parseResults.domRoot = this.dom.getRoot();
-
-    this.checkEncoding(this.htmlSource);
+    this.startParsing(source, isFinal);
+    this.nextChunk = '';
+    this.nextChunkIsFinal = false;
 
     if (this.stopped)
       return Promise.resolve(null);
@@ -126,7 +120,6 @@ export class HtmlParserAsync extends HtmlParser {
     let terminated: boolean;
     let isCData: boolean;
     let endTag: string;
-    let node: DomNode;
     const loopStartTime = processMillis();
 
     while ((ch = this.getChar() || await this.getNextChunkChar()) || this.state >= State.AT_COMMENT_START) {
@@ -148,54 +141,16 @@ export class HtmlParserAsync extends HtmlParser {
      switch (this.state) {
         case State.OUTSIDE_MARKUP:
           this.putBack(ch);
-
-          const text = this.collectedSpace + await this.gatherTextAsync();
-
-          if (text) {
-            this.dom.addChild(new TextElement(text, this.textLine, this.textColumn, true));
-            this.pendingSource = this.atEOF() && this.putBacks.length === 0 ? '' : '<';
-            this.callback('text', this.dom.getDepth() + 1, text, true);
-          }
-
-          this.collectedSpace = '';
-          this.currentTag = this.currentTagLc = '';
-          this.state = State.AT_MARKUP_START;
+          this.handleText(this.collectedSpace + await this.gatherTextAsync());
         break;
 
         case State.AT_MARKUP_START:
-          this.markupLine = this.line;
-          this.markupColumn = this.column - 1;
-
-          switch (ch) {
-            case '/':
-              this.state = State.AT_END_TAG_START;
-            break;
-
-            case '!':
-            case '?':
-              this.state = (ch === '!' ? State.AT_DECLARATION_START : State.AT_PROCESSING_START);
-              this.collectedSpace = '';
-            break;
-
-            default:
-              this.state = State.AT_START_TAG_START;
-              this.putBack(ch);
-          }
+          this.handleMarkupStart(ch);
         break;
 
         case State.AT_START_TAG_START:
           await this.gatherTagNameAsync(ch);
-
-          node = new DomNode(this.currentTag, this.markupLine, this.markupColumn);
-          this.dom.prePush(node);
-          this.dom.addChild(node);
-          this.dom.push(node);
-          this.callback('start-tag-start', this.dom.getDepth(), this.currentTag);
-
-          this.checkingCharset = (!this.charset && this.currentTagLc === 'meta');
-          this.collectedSpace = '';
-          this.pendingSource = '';
-          this.state = State.AT_ATTRIBUTE_START;
+          this.handleStartTagStart();
         break;
 
         case State.AT_END_TAG_START:
@@ -212,37 +167,15 @@ export class HtmlParserAsync extends HtmlParser {
         break;
 
         case State.IN_END_TAG:
-          if (ch !== '>') {
-            if (this.xmlMode) {
-              this.putBack(ch);
-              this.pop(this.currentTagLc, this.pendingSource);
-              this.reportError('Syntax error in end tag');
-              break;
-            }
-            else {
-              if (this.atEOF())
-                break;
+         const [doBreak, invalidEnding] = this.handleEndTag(ch);
 
-              ++this.parseResults.errors;
-              this.callback('error', 'Syntax error in end tag', this.line, this.column, '');
-              this.pendingSource = this.collectedSpace + ch;
-              this.gatherInvalidEndTagEndingAsync();
-              this.pop(this.currentTagLc, `</${this.currentTag}${this.pendingSource}`);
-              this.doEndTagCallback(this.currentTag, this.pendingSource);
-            }
-          }
-          else if (!this.currentTag) {
-            ++this.parseResults.errors;
-            this.callback('error', 'Empty end tag', this.line, this.column, this.pendingSource);
-            this.dom.addChild(new UnmatchedClosingTag(this.pendingSource, this.line, this.column));
-            this.collectedSpace = '';
-            this.pendingSource = '';
-            this.state = State.OUTSIDE_MARKUP;
-          }
-          else {
-            this.pop(this.currentTagLc, `</${this.currentTag}${this.collectedSpace}>`);
-            this.doEndTagCallback(this.currentTag, this.collectedSpace + '>');
-          }
+         if (doBreak)
+           break;
+         else if (invalidEnding) {
+           await this.gatherInvalidEndTagEndingAsync();
+           this.pop(this.currentTagLc, `</${this.currentTag}${this.pendingSource}`);
+           this.doEndTagCallback(this.currentTag, this.pendingSource);
+         }
         break;
 
         case State.AT_ATTRIBUTE_START:

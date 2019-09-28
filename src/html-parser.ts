@@ -209,11 +209,11 @@ export class HtmlParser {
     this.xmlMode = this.options.xmlMode;
   }
 
-  parse(source: string): ParseResults {
+  protected startParsing(source: string, isFinal: boolean): void {
     this.startTime = processMillis();
     this.parserRunning = true;
     this.htmlSource = source || '';
-    this.htmlSourceIsFinal = true;
+    this.htmlSourceIsFinal = isFinal;
     this.pendingSource = '';
     this.putBacks = [];
     this.sourceIndex = 0;
@@ -223,6 +223,11 @@ export class HtmlParser {
     this.parseResults.domRoot = this.dom.getRoot();
 
     this.checkEncoding(this.htmlSource);
+  }
+
+
+  parse(source: string): ParseResults {
+    this.startParsing(source, true);
 
     if (!this.stopped)
       this.parseLoop();
@@ -264,7 +269,6 @@ export class HtmlParser {
     let terminated: boolean;
     let isCData: boolean;
     let endTag: string;
-    let node: DomNode;
 
     while ((ch = this.getChar()) || this.state >= State.AT_COMMENT_START) {
       if (ch) {
@@ -280,59 +284,21 @@ export class HtmlParser {
       }
 
      if (!ch && this.state < State.AT_COMMENT_START)
-      break;
+       break;
 
      switch (this.state) {
         case State.OUTSIDE_MARKUP:
           this.putBack(ch);
-
-          const text = this.collectedSpace + this.gatherText();
-
-          if (text) {
-            this.dom.addChild(new TextElement(text, this.textLine, this.textColumn, true));
-            this.pendingSource = this.atEOF() && this.putBacks.length === 0 ? '' : '<';
-            this.callback('text', this.dom.getDepth() + 1, text, true);
-          }
-
-          this.collectedSpace = '';
-          this.currentTag = this.currentTagLc = '';
-          this.state = State.AT_MARKUP_START;
+          this.handleText(this.collectedSpace + this.gatherText());
         break;
 
         case State.AT_MARKUP_START:
-          this.markupLine = this.line;
-          this.markupColumn = this.column - 1;
-
-          switch (ch) {
-            case '/':
-              this.state = State.AT_END_TAG_START;
-            break;
-
-            case '!':
-            case '?':
-              this.state = (ch === '!' ? State.AT_DECLARATION_START : State.AT_PROCESSING_START);
-              this.collectedSpace = '';
-            break;
-
-            default:
-              this.state = State.AT_START_TAG_START;
-              this.putBack(ch);
-          }
+          this.handleMarkupStart(ch);
         break;
 
         case State.AT_START_TAG_START:
           this.gatherTagName(ch);
-
-          node = new DomNode(this.currentTag, this.markupLine, this.markupColumn);
-          this.dom.prePush(node);
-          this.dom.addChild(node);
-          this.dom.push(node);
-          this.callback('start-tag-start', this.dom.getDepth(), this.currentTag);
-
-          this.checkingCharset = (!this.charset && this.currentTagLc === 'meta');
-          this.collectedSpace = '';
-          this.pendingSource = '';
-          this.state = State.AT_ATTRIBUTE_START;
+          this.handleStartTagStart();
         break;
 
         case State.AT_END_TAG_START:
@@ -349,37 +315,15 @@ export class HtmlParser {
         break;
 
         case State.IN_END_TAG:
-          if (ch !== '>') {
-            if (this.xmlMode) {
-              this.putBack(ch);
-              this.pop(this.currentTagLc, this.pendingSource);
-              this.reportError('Syntax error in end tag');
-              break;
-            }
-            else {
-              if (this.atEOF())
-                break;
+         const [doBreak, invalidEnding] = this.handleEndTag(ch);
 
-              ++this.parseResults.errors;
-              this.callback('error', 'Syntax error in end tag', this.line, this.column, '');
-              this.pendingSource = this.collectedSpace + ch;
-              this.gatherInvalidEndTagEnding();
-              this.pop(this.currentTagLc, `</${this.currentTag}${this.pendingSource}`);
-              this.doEndTagCallback(this.currentTag, this.pendingSource);
-            }
-          }
-          else if (!this.currentTag) {
-            ++this.parseResults.errors;
-            this.callback('error', 'Empty end tag', this.line, this.column, this.pendingSource);
-            this.dom.addChild(new UnmatchedClosingTag(this.pendingSource, this.line, this.column));
-            this.collectedSpace = '';
-            this.pendingSource = '';
-            this.state = State.OUTSIDE_MARKUP;
-          }
-          else {
-            this.pop(this.currentTagLc, `</${this.currentTag}${this.collectedSpace}>`);
-            this.doEndTagCallback(this.currentTag, this.collectedSpace + '>');
-          }
+         if (doBreak)
+           break;
+         else if (invalidEnding) {
+           this.gatherInvalidEndTagEnding();
+           this.pop(this.currentTagLc, `</${this.currentTag}${this.pendingSource}`);
+           this.doEndTagCallback(this.currentTag, this.pendingSource);
+         }
         break;
 
         case State.AT_ATTRIBUTE_START:
@@ -681,6 +625,90 @@ export class HtmlParser {
 
     this.callback('completion', this.parseResults);
     this.parserRunning = false;
+  }
+
+  protected handleText(text: string): void {
+    if (text) {
+      this.dom.addChild(new TextElement(text, this.textLine, this.textColumn, true));
+      this.pendingSource = this.atEOF() && this.putBacks.length === 0 ? '' : '<';
+      this.callback('text', this.dom.getDepth() + 1, text, true);
+    }
+
+    this.collectedSpace = '';
+    this.currentTag = this.currentTagLc = '';
+    this.state = State.AT_MARKUP_START;
+  }
+
+  protected handleMarkupStart(ch: string): void {
+    this.markupLine = this.line;
+    this.markupColumn = this.column - 1;
+
+    switch (ch) {
+      case '/':
+        this.state = State.AT_END_TAG_START;
+      break;
+
+      case '!':
+      case '?':
+        this.state = (ch === '!' ? State.AT_DECLARATION_START : State.AT_PROCESSING_START);
+        this.collectedSpace = '';
+      break;
+
+      default:
+        this.state = State.AT_START_TAG_START;
+        this.putBack(ch);
+    }
+  }
+
+  protected handleStartTagStart(): void {
+    const node = new DomNode(this.currentTag, this.markupLine, this.markupColumn);
+
+    this.dom.prePush(node);
+    this.dom.addChild(node);
+    this.dom.push(node);
+    this.callback('start-tag-start', this.dom.getDepth(), this.currentTag);
+
+    this.checkingCharset = (!this.charset && this.currentTagLc === 'meta');
+    this.collectedSpace = '';
+    this.pendingSource = '';
+    this.state = State.AT_ATTRIBUTE_START;
+  }
+
+  protected handleEndTag(ch: string): [boolean, boolean] {
+    let doBreak = false;
+    let invalidEnding = false;
+
+    if (ch !== '>') {
+      if (this.xmlMode) {
+        this.putBack(ch);
+        this.pop(this.currentTagLc, this.pendingSource);
+        this.reportError('Syntax error in end tag');
+        doBreak = true;
+      }
+      else {
+        if (this.atEOF())
+          return [true, false];
+
+        ++this.parseResults.errors;
+        this.callback('error', 'Syntax error in end tag', this.line, this.column, '');
+        this.pendingSource = this.collectedSpace + ch;
+        invalidEnding = true;
+      }
+    }
+    else if (!this.currentTag) {
+      ++this.parseResults.errors;
+      this.callback('error', 'Empty end tag', this.line, this.column, this.pendingSource);
+      this.dom.addChild(new UnmatchedClosingTag(this.pendingSource, this.line, this.column));
+      this.collectedSpace = '';
+      this.pendingSource = '';
+      this.state = State.OUTSIDE_MARKUP;
+    }
+    else {
+      this.pop(this.currentTagLc, `</${this.currentTag}${this.collectedSpace}>`);
+      this.doEndTagCallback(this.currentTag, this.collectedSpace + '>');
+    }
+
+    return [doBreak, invalidEnding];
   }
 
   protected pop(tagLc: string, endTagText = '') {
