@@ -35,6 +35,8 @@ describe('formatter', () => {
 
     reformatted = dom.toString();
 
+    expect(reformatted).contains('/* Ignore &lt; as attribute */');
+    expect(reformatted).contains("console.log(value, '&szlig; ");
     expect(reformatted).contains('foo="=bar/baz&amp;"');
     expect(reformatted).contains(' class=inner-wrapper ');
   });

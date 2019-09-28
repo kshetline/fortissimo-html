@@ -185,7 +185,8 @@ function formatNode(node: DomNode, options: InternalOptions, indent: number): vo
     else if (elem instanceof TextElement) {
       options.lastText = elem;
 
-      if (options.escapeOptions.reencode !== ReencodeOptions.DONT_CHANGE) {
+      if (options.escapeOptions.reencode !== ReencodeOptions.DONT_CHANGE &&
+          node.tagLc !== 'script' && node.tagLc !== 'style') {
         if (elem.possibleEntities)
           elem.content = reencodeEntities(elem.content, options.escapeOptions);
         else
