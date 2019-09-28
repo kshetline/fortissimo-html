@@ -1,5 +1,5 @@
 import { ClosureState, DomElement, DomNode, TextElement } from './dom';
-import { columnWidth, EntityStyle, EscapeOptions, escapeToEntities, reencodeEntities, ReencodeOptions, TargetEncoding, unescapeEntities } from './characters';
+import { columnWidth, EntityStyle, EscapeOptions, escapeToEntities, reencodeEntities, ReencodeOptions, TargetEncoding } from './characters';
 
 export enum ValueQuoting {
   ALWAYS_QUOTE,

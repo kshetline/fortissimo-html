@@ -1,7 +1,5 @@
 import { processMillis } from './platform-specifics';
 import { isAttributeNameChar, isMarkupStart, isPCENChar, isWhitespace } from './characters';
-import { CData, ClosureState, CommentElement, DeclarationElement, DocType, ProcessingElement, TextElement,
-  UnmatchedClosingTag } from './dom';
 import { DEFAULT_OPTIONS, HtmlParser, ParseResults, State, tagForState, TEXT_STARTERS } from './html-parser';
 
 const DEFAULT_YIELD_TIME = 50;
@@ -197,53 +195,16 @@ export class HtmlParserAsync extends HtmlParser {
         break;
 
         case State.AT_ATTRIBUTE_VALUE:
-          if (ch === '>') {
-            const equals = this.preEqualsSpace + '=';
+          const quote = this.handleAttributeValueStepOne(ch);
 
-            this.dom.addAttribute(this.attribute, '', this.leadingSpace, equals, '');
-            this.doAttributeCallback(equals, '', '');
-            this.putBack(ch);
-          }
-          else {
-            let quote = (ch === '"' || ch === "'") ? ch : '';
+          if (quote !== undefined) {
             let value;
             [value, terminated] = await this.gatherAttributeValueAsync(quote, quote ? '' : ch);
-            const equals = this.preEqualsSpace + '=' + this.collectedSpace;
 
-            quote = (terminated ? '' : '_') + quote;
-            this.dom.addAttribute(this.attribute, value, this.leadingSpace, equals, quote);
-            this.doAttributeCallback(equals, value, quote);
-            this.collectedSpace = '';
+            if (this.handleAttributeValueStepTwo(ch, quote, value, terminated)) {
+              this.parsingResolver(null);
 
-            if (this.checkingCharset) {
-              const attribLc = this.attribute.toLowerCase();
-
-              if (attribLc === 'charset')
-                this.charset = value.trim();
-              else if (attribLc === 'http-equiv' && value.toLowerCase() === 'content-type') {
-                this.contentType = true;
-                this.charset = this.pendingCharset;
-              }
-              else if (attribLc === 'content') {
-                const charset = (/\bcharset[ \n\r\t\f]*=[ \n\r\t\f]*([\w\-]+)\b/i.exec(value) || [])[1];
-
-                if (this.contentType)
-                  this.charset = charset;
-                else
-                  this.pendingCharset = charset;
-              }
-
-              if (this.charset && this.parserRunning && this.callbacks.has('encoding')) {
-                const bailout = this.callback('encoding', this.charset, this.charset.toLowerCase().replace(/:\d{4}$|[^0-9a-z]/g, ''), true);
-
-                if (bailout) {
-                  this.parserRunning = false;
-                  this.pendingReset = true;
-                  this.parsingResolver(null);
-
-                  return;
-                }
-              }
+              return;
             }
           }
 
@@ -251,94 +212,22 @@ export class HtmlParserAsync extends HtmlParser {
         break;
 
         case State.AT_DECLARATION_START:
-          if (this.collectedSpace.length === 0 && ch === '-') {
-            const ch2 = this.getChar() || await this.getNextChunkChar();
+          if (this.handleDeclarationStartStepOne(ch)) {
+            [content, terminated, isCData] = await this.gatherDeclarationOrProcessingAsync(this.collectedSpace + ch,
+              this.dom.shouldParseCData());
 
-            if (ch2 === '-') {
-              this.state = State.AT_COMMENT_START;
-              break;
-            }
-            else
-              this.putBack(ch2);
+            this.handleDeclarationStartStepTwo(content, terminated, isCData);
           }
-
-          [content, terminated, isCData] = await this.gatherDeclarationOrProcessingAsync(this.collectedSpace + ch,
-            this.dom.shouldParseCData());
-
-          if (isCData) {
-            this.dom.addChild(new CData(content, this.markupLine, this.markupColumn, terminated));
-
-            if (!terminated)
-              this.reportError('File ended in unterminated CDATA', false);
-
-            this.callback('cdata', this.dom.getDepth() + 1, content, terminated);
-          }
-          else if (/^doctype\b/i.test(content)) {
-            const docType = new DocType(content, this.markupLine, this.markupColumn, terminated);
-
-            this.dom.addChild(docType);
-
-            if (!terminated)
-              this.reportError('File ended in unterminated doctype', false);
-
-            if (this.parserRunning && this.callbacks.has('doctype'))
-              this.callback('doctype', docType, terminated);
-            else
-              this.callback('declaration', this.dom.getDepth() + 1, content, terminated);
-
-            this.xmlMode = (docType.type === 'xhtml');
-            this.dom.setXmlMode(this.xmlMode);
-          }
-          else {
-            this.dom.addChild(new DeclarationElement(content, this.markupLine, this.markupColumn, terminated));
-
-            if (!terminated)
-              this.reportError('File ended in unterminated declaration', false);
-
-            this.callback('declaration', this.dom.getDepth() + 1, content, terminated);
-          }
-
-          this.collectedSpace = '';
-          this.pendingSource = '';
-          this.leadingSpace = '';
-          this.state = State.OUTSIDE_MARKUP;
         break;
 
         case State.AT_PROCESSING_START:
           [content, terminated] = await this.gatherDeclarationOrProcessingAsync(this.collectedSpace + ch);
-
-          this.dom.addChild(new ProcessingElement(content, this.markupLine, this.markupColumn, terminated));
-
-          if (!terminated)
-            this.reportError('File ended in unterminated processing instruction', false);
-
-          this.callback('processing', this.dom.getDepth() + 1, content, terminated);
-
-          if (content.startsWith('xml ') && this.dom.canDoXmlMode()) {
-            this.xmlMode = true;
-            this.dom.setXmlMode(true);
-          }
-
-          this.collectedSpace = '';
-          this.pendingSource = '';
-          this.leadingSpace = '';
-          this.state = State.OUTSIDE_MARKUP;
+          this.handleProcessingStart(content, terminated);
         break;
 
         case State.AT_COMMENT_START:
           [content, terminated] = await this.gatherCommentAsync(this.collectedSpace + ch);
-
-          this.dom.addChild(new CommentElement(content, this.markupLine, this.markupColumn, terminated));
-
-          if (!terminated)
-            this.reportError('File ended in unterminated comment', false);
-
-          this.callback('comment', this.dom.getDepth() + 1, content, terminated);
-
-          this.collectedSpace = '';
-          this.pendingSource = '';
-          this.leadingSpace = '';
-          this.state = State.OUTSIDE_MARKUP;
+          this.handleCommentStart(content, terminated);
         break;
 
         case State.IN_STYLE_ELEMENT:
@@ -352,27 +241,7 @@ export class HtmlParserAsync extends HtmlParser {
           }
 
           [content, endTag, terminated] = await this.gatherUntilEndTagAsync(tag, ch);
-
-          if (!terminated) {
-            this.reportError(`File ended in unterminated <${tag}> section`, false);
-            this.dom.getCurrentNode().closureState = ClosureState.UNCLOSED;
-          }
-
-          if (content || this.collectedSpace) {
-            content = this.collectedSpace + content;
-            this.dom.addChild(new TextElement(content, this.textLine, this.textColumn, tag === 'textarea'));
-
-            this.callback('text', this.dom.getDepth() + 1, content, tag === 'textarea');
-
-            this.collectedSpace = '';
-            this.pendingSource = '';
-          }
-
-          const $$ = new RegExp('^<\\/(' + tag + ')([ \\n\\r\\t\\f]*)>$', 'i').exec(endTag);
-
-          this.pop(tag, `</${$$[1]}${$$[2]}>`);
-          this.doEndTagCallback($$[1], $$[2] + '>');
-          this.state = State.OUTSIDE_MARKUP;
+          this.handleTextBlockElements(tag, content, endTag, terminated);
         break;
       }
 
@@ -380,50 +249,10 @@ export class HtmlParserAsync extends HtmlParser {
         return;
     }
 
-    if (this.state !== State.OUTSIDE_MARKUP) {
-      ++this.parseResults.errors;
+    this.parseLoopWrapUp();
 
-      if (this.state <= State.AT_ATTRIBUTE_VALUE) {
-        if (this.state === State.AT_ATTRIBUTE_ASSIGNMENT) {
-          this.dom.addAttribute(this.attribute, '', this.leadingSpace, '', '');
-          this.doAttributeCallback('', '', '');
-        }
-        else if (this.state === State.AT_ATTRIBUTE_VALUE) {
-          const equals = this.preEqualsSpace + '=';
-
-          this.dom.addAttribute(this.attribute, '', this.leadingSpace, equals, '');
-          this.doAttributeCallback(equals, '', '');
-        }
-
-        this.dom.getCurrentNode().badTerminator = '';
-        this.callback('error', `Unexpected end of <${this.currentTag}> tag`, this.line, this.column);
-      }
-      else if (this.state === State.AT_END_TAG_START || this.state === State.IN_END_TAG) {
-        this.callback('error', 'Unexpected end of file in end tag', this.line, this.column, this.pendingSource);
-        this.dom.addChild(new UnmatchedClosingTag(this.pendingSource, this.line, this.column));
-        this.collectedSpace = '';
-      }
-      else
-        this.callback('error', 'Unexpected end of file', this.line, this.column, this.pendingSource);
-    }
-
-    if (!this.parseResults) // In case parser reset while running.
-      return;
-
-    if (this.collectedSpace) {
-      this.dom.addChild(new TextElement(this.collectedSpace, this.textLine, this.textColumn, true));
-      this.callback('text', this.dom.getDepth() + 1, this.collectedSpace);
-    }
-
-    [this.parseResults.unclosedTags, this.parseResults.implicitlyClosedTags] =
-      this.dom.getRoot().countUnclosed();
-    this.parseResults.lines = this.line;
-    this.parseResults.stopped = this.stopped;
-    this.parseResults.totalTime = processMillis() - this.startTime;
-
-    this.callback('completion', this.parseResults);
-    this.parsingResolver(this.parseResults);
-    this.parserRunning = false;
+    if (this.parsingResolver)
+      this.parsingResolver(this.parseResults);
   }
 
   private async getNextChunkChar(): Promise<string> {
@@ -543,25 +372,28 @@ export class HtmlParserAsync extends HtmlParser {
   }
 
   private async gatherCommentAsync(init = ''): Promise<[string, boolean]> {
-    let comment = init;
+    const comment = [init];
     let stage = (init.endsWith('-') ? 1 : 0);
     let ch: string;
 
+    // noinspection DuplicatedCode
     while ((ch = this.getChar() || await this.getNextChunkChar())) {
-      comment += ch;
+      comment.push(ch);
 
       if (stage === 0 && ch === '-')
         stage = 1;
       else if (stage === 1 && ch === '-')
         stage = 2;
       else if (stage === 2 && ch === '>') {
-        return [comment.substr(0, comment.length - 3), true];
+        const cmt = comment.join('');
+
+        return [cmt.substr(0, cmt.length - 3), true];
       }
       else
         stage = 0;
     }
 
-    return [comment, false];
+    return [comment.join(''), false];
   }
 
   private async gatherDeclarationOrProcessingAsync(init = '', checkForCData?: boolean):
@@ -573,6 +405,7 @@ export class HtmlParserAsync extends HtmlParser {
     let ch: string;
     let cdataDetected = false;
 
+    // noinspection DuplicatedCode
     while ((ch = this.getChar() || await this.getNextChunkChar())) {
       if (checkForCData && content.length === 7) {
         cdataDetected = (content === '[CDATA[');
@@ -594,6 +427,7 @@ export class HtmlParserAsync extends HtmlParser {
     let endStage = ender.startsWith(init) ? init.length : 0;
     let ch: string;
 
+    // noinspection DuplicatedCode
     while ((ch = this.getChar() || await this.getNextChunkChar())) {
       content += ch;
 
