@@ -1,6 +1,9 @@
 import benchmark from 'htmlparser-benchmark';
 import { HtmlParser } from '../src/html-parser';
-import * as HTMLParser from 'fast-html-parser';
+import * as FastHtmlParser from 'fast-html-parser';
+
+let speedFFF: number;
+let speedFast: number;
 
 function first(done: () => void) {
   const bench = benchmark((html: string, callback: any) => {
@@ -20,14 +23,15 @@ function first(done: () => void) {
   });
 
   bench.on('result', (stat: any) => {
+    speedFFF = stat.mean();
     console.log('fff-html: ' + stat.mean().toPrecision(6) + ' ms/file ± ' + stat.sd().toPrecision(6));
     done();
   });
 }
 
-function second() {
+function second(done: () => void) {
   const bench = benchmark((html: string, callback: any) => {
-    const root = HTMLParser.parse(html);
+    const root = FastHtmlParser.parse(html);
     callback();
   });
 
@@ -36,8 +40,11 @@ function second() {
   });
 
   bench.on('result', (stat: any) => {
+    speedFast = stat.mean();
     console.log('fast-html: ' + stat.mean().toPrecision(6) + ' ms/file ± ' + stat.sd().toPrecision(6));
+    done();
   });
 }
 
-first(second);
+first(() => second(() => console.log('fff-html is %s% of the speed of fast-html',
+  (speedFFF / speedFast * 100).toPrecision(3))));

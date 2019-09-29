@@ -1,6 +1,6 @@
 import { processMillis } from './platform-specifics';
 import { isAttributeNameChar, isMarkupStart, isPCENChar, isWhitespace } from './characters';
-import { DEFAULT_OPTIONS, HtmlParser, ParseResults, State, tagForState, TEXT_STARTERS } from './html-parser';
+import { HtmlParser, HtmlParserOptions, ParseResults, State } from './html-parser';
 
 const DEFAULT_YIELD_TIME = 50;
 
@@ -11,7 +11,7 @@ export class HtmlParserAsync extends HtmlParser {
   private resolveNextChunk: (gotMoreChars: string) => void;
   private yieldTime = DEFAULT_YIELD_TIME;
 
-  constructor(options = DEFAULT_OPTIONS) {
+  constructor(options?: HtmlParserOptions) {
     super(options);
   }
 
@@ -119,7 +119,7 @@ export class HtmlParserAsync extends HtmlParser {
 
     while ((ch = this.getChar() || await this.getNextChunkChar()) || this.state >= State.AT_COMMENT_START) {
       if (ch) {
-        if (TEXT_STARTERS.has(this.state)) {
+        if (HtmlParser.TEXT_STARTERS.has(this.state)) {
           this.textLine = this.line;
           this.textColumn = this.column;
         }
@@ -233,7 +233,7 @@ export class HtmlParserAsync extends HtmlParser {
         case State.IN_STYLE_ELEMENT:
         case State.IN_SCRIPT_ELEMENT:
         case State.IN_TEXT_AREA_ELEMENT:
-          const tag = tagForState[this.state];
+          const tag = HtmlParser.tagForState[this.state];
 
           if (ch === '<') {
             this.markupLine = this.line;
@@ -290,7 +290,7 @@ export class HtmlParserAsync extends HtmlParser {
 
     this.pendingSource = '';
 
-    while ((ch = this.getChar() || await this.getNextChunkChar())) {
+    while ((ch = this.getChar(HtmlParser.RE_TEXT) || await this.getNextChunkChar())) {
       if (ch === '<') {
         const ch2 = this.getChar() || await this.getNextChunkChar();
 
@@ -342,7 +342,8 @@ export class HtmlParserAsync extends HtmlParser {
 
     let ch: string;
 
-    while (isAttributeNameChar(ch = this.getChar() || await this.getNextChunkChar(), !this.xmlMode))
+    while (isAttributeNameChar(ch = this.getChar(HtmlParser.RE_ATTRIB_NAME) ||
+           await this.getNextChunkChar(), !this.xmlMode))
       this.attribute += ch;
 
     this.putBack(ch);
@@ -354,7 +355,8 @@ export class HtmlParserAsync extends HtmlParser {
     let ch: string;
     let afterSlash = false;
 
-    while ((ch = this.getChar() || await this.getNextChunkChar()) && ch !== quote && (quote || (!isWhitespace(ch) && ch !== '>'))) {
+    while ((ch = this.getChar(HtmlParser.regexForAttribValue[quote]) ||
+           await this.getNextChunkChar()) && ch !== quote && (quote || (!isWhitespace(ch) && ch !== '>'))) {
       value += ch;
       afterSlash = ch === '/';
     }
@@ -377,7 +379,7 @@ export class HtmlParserAsync extends HtmlParser {
     let ch: string;
 
     // noinspection DuplicatedCode
-    while ((ch = this.getChar() || await this.getNextChunkChar())) {
+    while ((ch = this.getChar(stage === 0 ? HtmlParser.RE_COMMENT : undefined) || await this.getNextChunkChar())) {
       comment.push(ch);
 
       if (stage === 0 && ch === '-')
@@ -406,7 +408,8 @@ export class HtmlParserAsync extends HtmlParser {
     let cdataDetected = false;
 
     // noinspection DuplicatedCode
-    while ((ch = this.getChar() || await this.getNextChunkChar())) {
+    while ((ch = this.getChar(checkForCData ? undefined : HtmlParser.RE_DECLARATION) ||
+           await this.getNextChunkChar())) {
       if (checkForCData && content.length === 7) {
         cdataDetected = (content === '[CDATA[');
       }
@@ -428,7 +431,7 @@ export class HtmlParserAsync extends HtmlParser {
     let ch: string;
 
     // noinspection DuplicatedCode
-    while ((ch = this.getChar() || await this.getNextChunkChar())) {
+    while ((ch = this.getChar(endStage === 0 ? HtmlParser.RE_TEXT : undefined) || await this.getNextChunkChar())) {
       content += ch;
 
       if (endStage >= len && ch === '>')

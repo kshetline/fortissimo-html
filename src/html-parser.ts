@@ -44,33 +44,6 @@ export enum State {
   IN_TEXT_AREA_ELEMENT,
 }
 
-export const TEXT_STARTERS = new Set<State>([State.OUTSIDE_MARKUP, State.IN_SCRIPT_ELEMENT, State.IN_STYLE_ELEMENT,
-                                      State.IN_TEXT_AREA_ELEMENT]);
-
-export const DEFAULT_OPTIONS: HtmlParserOptions = {
-  emptyEndTag: true,
-  eol: '\n',
-  xmlMode: false,
-};
-
-export const tagForState = {
-  [State.IN_SCRIPT_ELEMENT]: 'script',
-  [State.IN_STYLE_ELEMENT]: 'style',
-  [State.IN_TEXT_AREA_ELEMENT]: 'textarea',
-};
-
-export const RE_TEXT = /^([^<\n\r\uD800-\uDFFF]+)/;
-
-export const RE_ATTRIB_NAME = /^([^=>\/\s\uD800-\uDFFF]+)/;
-
-export const regexForAttribValue: Record<string, RegExp> = {
-  '"': /^([^"\n\r\uD800-\uDFFF]+)/i,
-  "'": /^([^'\n\r\uD800-\uDFFF]+)/i,
-  '': /^([^=>\s\uD800-\uDFFF]+)/i,
-};
-
-export const RE_COMMENT = /^([^->\n\r\uD800-\uDFFF]+)/;
-
 type AttributeCallback = (leadingSpace: string, name: string, equalSign: string, value: string, quote: string) => void;
 type BasicCallback = (depth: number, text: string, terminated: boolean) => void;
 type CompletionCallback = (results?: ParseResults) => void;
@@ -91,8 +64,33 @@ type EventType = 'attribute' | 'cdata' | 'comment' | 'completion' | 'declaration
 const CAN_BE_HANDLED_GENERICALLY = new Set(['attribute', 'cdata', 'comment', 'declaration', 'end-tag', 'error',
                                             'processing', 'start-tag-end', 'start-tag-start', 'text']);
 
-
 export class HtmlParser {
+  protected static TEXT_STARTERS =
+    new Set<State>([State.OUTSIDE_MARKUP, State.IN_SCRIPT_ELEMENT, State.IN_STYLE_ELEMENT, State.IN_TEXT_AREA_ELEMENT]);
+
+  protected static DEFAULT_OPTIONS: HtmlParserOptions = {
+    emptyEndTag: true,
+    eol: '\n',
+    xmlMode: false,
+  };
+
+  protected static tagForState = {
+    [State.IN_SCRIPT_ELEMENT]: 'script',
+    [State.IN_STYLE_ELEMENT]: 'style',
+    [State.IN_TEXT_AREA_ELEMENT]: 'textarea',
+  };
+
+  protected static RE_TEXT = /^([^<\n\r\uD800-\uDFFF]+)/;
+  protected static RE_ATTRIB_NAME = /^([^=>\/\s\uD800-\uDFFF]+)/;
+  protected static RE_COMMENT = /^([^->\n\r\uD800-\uDFFF]+)/;
+  protected static RE_DECLARATION = /^([^>\n\r\uD800-\uDFFF]+)/;
+
+  protected static regexForAttribValue: Record<string, RegExp> = {
+    '"': /^([^"\n\r\uD800-\uDFFF]+)/,
+    "'": /^([^'\n\r\uD800-\uDFFF]+)/,
+    '': /^([^=>\/\s\uD800-\uDFFF]+)/,
+  };
+
   protected attribute = '';
   protected charset = '';
   protected callbacks = new Map<EventType, ParserCallback>();
@@ -126,7 +124,7 @@ export class HtmlParser {
   protected xmlMode = false;
 
   constructor(
-    options = DEFAULT_OPTIONS
+    options = HtmlParser.DEFAULT_OPTIONS
   ) {
     this.options = {};
     Object.assign(this.options, options);
@@ -284,7 +282,7 @@ export class HtmlParser {
 
     while ((ch = this.getChar()) || this.state >= State.AT_COMMENT_START) {
       if (ch) {
-        if (TEXT_STARTERS.has(this.state)) {
+        if (HtmlParser.TEXT_STARTERS.has(this.state)) {
           this.textLine = this.line;
           this.textColumn = this.column;
         }
@@ -395,7 +393,7 @@ export class HtmlParser {
         case State.IN_STYLE_ELEMENT:
         case State.IN_SCRIPT_ELEMENT:
         case State.IN_TEXT_AREA_ELEMENT:
-          const tag = tagForState[this.state];
+          const tag = HtmlParser.tagForState[this.state];
 
           if (ch === '<') {
             this.markupLine = this.line;
@@ -925,7 +923,7 @@ export class HtmlParser {
 
     this.pendingSource = '';
 
-    while ((ch = this.getChar(RE_TEXT))) {
+    while ((ch = this.getChar(HtmlParser.RE_TEXT))) {
       if (ch === '<') {
         const ch2 = this.getChar();
 
@@ -978,7 +976,7 @@ export class HtmlParser {
 
     let ch: string;
 
-    while (isAttributeNameChar(ch = this.getChar(RE_ATTRIB_NAME), !this.xmlMode))
+    while (isAttributeNameChar(ch = this.getChar(HtmlParser.RE_ATTRIB_NAME), !this.xmlMode))
       this.attribute += ch;
 
     this.putBack(ch);
@@ -990,7 +988,8 @@ export class HtmlParser {
     let ch: string;
     let afterSlash = false;
 
-    while ((ch = this.getChar(regexForAttribValue[quote])) && ch !== quote && (quote || (!isWhitespace(ch) && ch !== '>'))) {
+    while ((ch = this.getChar(HtmlParser.regexForAttribValue[quote])) &&
+           ch !== quote && (quote || (!isWhitespace(ch) && ch !== '>'))) {
       value += ch;
       afterSlash = ch === '/';
     }
@@ -1013,7 +1012,7 @@ export class HtmlParser {
     let ch: string;
 
     // noinspection DuplicatedCode
-    while ((ch = this.getChar(stage === 0 ? RE_COMMENT : undefined))) {
+    while ((ch = this.getChar(stage === 0 ? HtmlParser.RE_COMMENT : undefined))) {
       comment.push(ch);
 
       if (stage === 0 && ch === '-')
@@ -1041,9 +1040,10 @@ export class HtmlParser {
     let cdataDetected = false;
 
     // noinspection DuplicatedCode
-    while ((ch = this.getChar())) {
+    while ((ch = this.getChar(checkForCData ? undefined : HtmlParser.RE_DECLARATION))) {
       if (checkForCData && content.length === 7) {
         cdataDetected = (content === '[CDATA[');
+        checkForCData = false;
       }
 
       if (ch === '>' && (!cdataDetected || content.endsWith(']]')))
@@ -1063,7 +1063,7 @@ export class HtmlParser {
     let ch: string;
 
     // noinspection DuplicatedCode
-    while ((ch = this.getChar(endStage === 0 ? RE_TEXT : undefined))) {
+    while ((ch = this.getChar(endStage === 0 ? HtmlParser.RE_TEXT : undefined))) {
       content += ch;
 
       if (endStage >= len && ch === '>')
