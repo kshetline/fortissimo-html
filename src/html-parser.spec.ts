@@ -223,15 +223,42 @@ describe('html-parser', () => {
     expect(results.domRoot.toString()).equals('a\nb\nc\nd');
     results = new HtmlParser({ eol: '\n' }).parse(content);
     expect(results.domRoot.toString()).equals('a\nb\nc\nd');
+    results = new HtmlParser({ eol: 'lf' }).parse(content);
+    expect(results.domRoot.toString()).equals('a\nb\nc\nd');
 
     results = new HtmlParser({ eol: 'r' }).parse(content);
     expect(results.domRoot.toString()).equals('a\rb\rc\rd');
     results = new HtmlParser({ eol: '\r' }).parse(content);
+    expect(results.domRoot.toString()).equals('a\rb\rc\rd');
+    results = new HtmlParser({ eol: 'cr' }).parse(content);
     expect(results.domRoot.toString()).equals('a\rb\rc\rd');
 
     results = new HtmlParser({ eol: 'rn' }).parse(content);
     expect(results.domRoot.toString()).equals('a\r\nb\r\nc\r\nd');
     results = new HtmlParser({ eol: '\r\n' }).parse(content);
     expect(results.domRoot.toString()).equals('a\r\nb\r\nc\r\nd');
+    results = new HtmlParser({ eol: 'crlf' }).parse(content);
+    expect(results.domRoot.toString()).equals('a\r\nb\r\nc\r\nd');
+  });
+
+  it('should determine tabbed column positions correctly', () => {
+    const dom = new HtmlParser({ tabSize: 4 }).parse(
+`
+<div id=do></div>
+\t<div id=re></div>
+ \t<div id=me></div>
+  \t<div id=fa></div>
+   \t<div id=so></div>
+    \t<div id=la></div>
+\t\t<div id=ti></div>
+`).domRoot;
+
+    expect(dom.querySelector('#do').column).equals(1);
+    expect(dom.querySelector('#re').column).equals(5);
+    expect(dom.querySelector('#me').column).equals(5);
+    expect(dom.querySelector('#fa').column).equals(5);
+    expect(dom.querySelector('#so').column).equals(5);
+    expect(dom.querySelector('#la').column).equals(9);
+    expect(dom.querySelector('#ti').column).equals(9);
   });
 });

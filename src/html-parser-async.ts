@@ -124,10 +124,7 @@ export class HtmlParserAsync extends HtmlParser {
           this.textColumn = this.column;
         }
 
-        while (isWhitespace(ch)) {
-          this.collectedSpace += ch;
-          ch = this.getChar() || await this.getNextChunkChar();
-        }
+        ch = await this.gatherWhitespaceAsync(ch);
       }
 
      if (!ch && this.state < State.AT_COMMENT_START)
@@ -282,6 +279,15 @@ export class HtmlParserAsync extends HtmlParser {
           setTimeout(() => this.callback('request-data'));
       };
     });
+  }
+
+  private async gatherWhitespaceAsync(ch: string): Promise<string> {
+    while (ch.length > 1 || isWhitespace(ch)) {
+      this.collectedSpace += ch;
+      ch = this.getChar(HtmlParser.RE_WHITESPACE) || await this.getNextChunkChar();
+    }
+
+    return ch;
   }
 
   private async gatherTextAsync(): Promise<string> {

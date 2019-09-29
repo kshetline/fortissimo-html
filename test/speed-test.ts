@@ -18,10 +18,6 @@ function first(done: () => void) {
       .parse(html);
   });
 
-  bench.on('progress', (key: string) => {
-    // console.log('finished parsing ' + key + '.html');
-  });
-
   bench.on('result', (stat: any) => {
     speedFFF = stat.mean();
     console.log('fff-html: ' + stat.mean().toPrecision(6) + ' ms/file ± ' + stat.sd().toPrecision(6));
@@ -31,12 +27,8 @@ function first(done: () => void) {
 
 function second(done: () => void) {
   const bench = benchmark((html: string, callback: any) => {
-    const root = FastHtmlParser.parse(html);
+    FastHtmlParser.parse(html);
     callback();
-  });
-
-  bench.on('progress', (key: string) => {
-    // console.log('finished parsing ' + key + '.html');
   });
 
   bench.on('result', (stat: any) => {

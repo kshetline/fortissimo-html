@@ -252,31 +252,4 @@ describe('html-parser-async', () => {
       expect(results.errors).equals(1);
     }
   });
-
-  it('should handle all eol options - async', async () => {
-    const content = 'a\nb\rc\r\nd';
-    let results: ParseResults;
-
-    results = await new HtmlParserAsync({ eol: false }).parseAsync(content);
-    expect(results.domRoot.toString()).equals(content);
-    results = await new HtmlParserAsync({ eol: '?' }).parseAsync(content);
-    expect(results.domRoot.toString()).equals(content);
-
-    results = await new HtmlParserAsync({ eol: true }).parseAsync(content);
-    expect(results.domRoot.toString()).equals('a\nb\nc\nd');
-    results = await new HtmlParserAsync({ eol: 'n' }).parseAsync(content);
-    expect(results.domRoot.toString()).equals('a\nb\nc\nd');
-    results = await new HtmlParserAsync({ eol: '\n' }).parseAsync(content);
-    expect(results.domRoot.toString()).equals('a\nb\nc\nd');
-
-    results = await new HtmlParserAsync({ eol: 'r' }).parseAsync(content);
-    expect(results.domRoot.toString()).equals('a\rb\rc\rd');
-    results = await new HtmlParserAsync({ eol: '\r' }).parseAsync(content);
-    expect(results.domRoot.toString()).equals('a\rb\rc\rd');
-
-    results = await new HtmlParserAsync({ eol: 'rn' }).parseAsync(content);
-    expect(results.domRoot.toString()).equals('a\r\nb\r\nc\r\nd');
-    results = await new HtmlParserAsync({ eol: '\r\n' }).parseAsync(content);
-    expect(results.domRoot.toString()).equals('a\r\nb\r\nc\r\nd');
-  });
 });

@@ -7,6 +7,7 @@ import { CData, ClosureState, CommentElement, CQ, DeclarationElement, DocType, D
 export interface HtmlParserOptions {
   emptyEndTag?: boolean;
   eol?: string | boolean;
+  tabSize?: number;
   xmlMode?: boolean;
 }
 
@@ -71,6 +72,7 @@ export class HtmlParser {
   protected static DEFAULT_OPTIONS: HtmlParserOptions = {
     emptyEndTag: true,
     eol: '\n',
+    tabSize: 8,
     xmlMode: false,
   };
 
@@ -80,14 +82,15 @@ export class HtmlParser {
     [State.IN_TEXT_AREA_ELEMENT]: 'textarea',
   };
 
-  protected static RE_TEXT = /^([^<\n\r\uD800-\uDFFF]+)/;
+  protected static RE_WHITESPACE = /^([ \f]+)/;
+  protected static RE_TEXT = /^([^<\t\n\r\uD800-\uDFFF]+)/;
   protected static RE_ATTRIB_NAME = /^([^=>\/\s\uD800-\uDFFF]+)/;
-  protected static RE_COMMENT = /^([^->\n\r\uD800-\uDFFF]+)/;
-  protected static RE_DECLARATION = /^([^>\n\r\uD800-\uDFFF]+)/;
+  protected static RE_COMMENT = /^([^->\t\n\r\uD800-\uDFFF]+)/;
+  protected static RE_DECLARATION = /^([^>\t\n\r\uD800-\uDFFF]+)/;
 
   protected static regexForAttribValue: Record<string, RegExp> = {
-    '"': /^([^"\n\r\uD800-\uDFFF]+)/,
-    "'": /^([^'\n\r\uD800-\uDFFF]+)/,
+    '"': /^([^"\t\n\r\uD800-\uDFFF]+)/,
+    "'": /^([^'\t\n\r\uD800-\uDFFF]+)/,
     '': /^([^=>\/\s\uD800-\uDFFF]+)/,
   };
 
@@ -97,6 +100,7 @@ export class HtmlParser {
   protected checkingCharset = false;
   protected collectedSpace = '';
   protected column = 0;
+  protected columnIncrement = 1;
   protected contentType = false;
   protected currentTag = '';
   protected currentTagLc = '';
@@ -119,6 +123,7 @@ export class HtmlParser {
   protected startTime: number;
   protected state = State.OUTSIDE_MARKUP;
   protected stopped = false;
+  protected tabSize = HtmlParser.DEFAULT_OPTIONS.tabSize;
   protected textColumn: number;
   protected textLine: number;
   protected xmlMode = false;
@@ -188,6 +193,7 @@ export class HtmlParser {
   stop(): void {
     this.charset = '';
     this.checkingCharset = false;
+    this.columnIncrement = 1;
     this.htmlSource = '';
     this.htmlSourceIsFinal = false;
     this.parserRunning = false;
@@ -201,6 +207,7 @@ export class HtmlParser {
     this.checkingCharset = false;
     this.collectedSpace = '';
     this.column = 0;
+    this.columnIncrement = 1;
     this.contentType = false;
     this.dom = new DomModel();
     this.htmlSource = '';
@@ -287,10 +294,7 @@ export class HtmlParser {
           this.textColumn = this.column;
         }
 
-        while (isWhitespace(ch)) {
-          this.collectedSpace += ch;
-          ch = this.getChar();
-        }
+        ch = this.gatherWhitespace(ch);
       }
 
      if (!ch && this.state < State.AT_COMMENT_START)
@@ -828,8 +832,10 @@ export class HtmlParser {
           ++this.line;
           this.column = 0;
         }
-        else
-          ++this.column;
+        else {
+          this.column += this.columnIncrement;
+          this.columnIncrement = (ch === '\t' ? this.tabSize - (this.column - 1) % this.tabSize : 1);
+        }
 
         return ch;
       }
@@ -843,6 +849,7 @@ export class HtmlParser {
       if ($) {
         this.sourceIndex += $[1].length;
         this.parseResults.characters += $[1].length;
+        this.column += this.columnIncrement + $[1].length - 1;
 
         return $[1];
       }
@@ -878,7 +885,8 @@ export class HtmlParser {
     else {
       const cp = ch.charCodeAt(0);
 
-      ++this.column;
+      this.column += this.columnIncrement;
+      this.columnIncrement = (ch === '\t' ? this.tabSize - (this.column - 1) % this.tabSize : 1);
 
       // Test for high surrogate
       if (0xD800 <= cp && cp <= 0xDBFF) {
@@ -915,6 +923,15 @@ export class HtmlParser {
       --this.line;
     else
       --this.column;
+  }
+
+  private gatherWhitespace(ch: string): string {
+    while (ch.length > 1 || isWhitespace(ch)) {
+      this.collectedSpace += ch;
+      ch = this.getChar(HtmlParser.RE_WHITESPACE);
+    }
+
+    return ch;
   }
 
   private gatherText(): string {
@@ -1090,16 +1107,21 @@ export class HtmlParser {
       switch (this.options.eol) {
         case true:
         case '\n':
-        case 'n': this.options.eol = '\n'; break;
+        case 'n':
+        case 'lf': this.options.eol = '\n'; break;
 
         case '\r':
-        case 'r': this.options.eol = '\r'; break;
+        case 'r':
+        case 'cr': this.options.eol = '\r'; break;
 
         case '\r\n':
-        case 'rn': this.options.eol = '\r\n'; break;
+        case 'rn':
+        case 'crlf': this.options.eol = '\r\n'; break;
 
         default: this.options.eol = false;
       }
     }
+
+    this.tabSize = this.options.tabSize;
   }
 }
