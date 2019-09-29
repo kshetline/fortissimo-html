@@ -59,6 +59,18 @@ export const tagForState = {
   [State.IN_TEXT_AREA_ELEMENT]: 'textarea',
 };
 
+export const RE_TEXT = /^([^<\n\r\uD800-\uDFFF]+)/;
+
+export const RE_ATTRIB_NAME = /^([^=>\/\s\uD800-\uDFFF]+)/;
+
+export const regexForAttribValue: Record<string, RegExp> = {
+  '"': /^([^"\n\r\uD800-\uDFFF]+)/i,
+  "'": /^([^'\n\r\uD800-\uDFFF]+)/i,
+  '': /^([^=>\s\uD800-\uDFFF]+)/i,
+};
+
+export const RE_COMMENT = /^([^->\n\r\uD800-\uDFFF]+)/;
+
 type AttributeCallback = (leadingSpace: string, name: string, equalSign: string, value: string, quote: string) => void;
 type BasicCallback = (depth: number, text: string, terminated: boolean) => void;
 type CompletionCallback = (results?: ParseResults) => void;
@@ -794,7 +806,7 @@ export class HtmlParser {
     return this.htmlSourceIsFinal && this.sourceIndex >= (this.htmlSource || '').length;
   }
 
-  protected getChar(): string {
+  protected getChar(multi?: RegExp): string {
     let ch: string;
 
     if (this.putBacks.length > 0) {
@@ -827,26 +839,36 @@ export class HtmlParser {
 
     if (!ch && this.sourceIndex >= this.htmlSource.length)
       return '';
-    else {
-      ++this.parseResults.characters;
-      ch = ch || this.htmlSource.charAt(this.sourceIndex++);
+    else if (!ch && multi) {
+      const $ = multi.exec(this.htmlSource.slice(this.sourceIndex));
 
-      if (ch === '\r') {
-        const ch2 = this.htmlSource.charAt(this.sourceIndex);
+      if ($) {
+        this.sourceIndex += $[1].length;
+        this.parseResults.characters += $[1].length;
 
-        if (!ch2 && !this.htmlSourceIsFinal) {
-          // Special chunk boundary case.
-          this.putBacks.push('--' + ch);
-          --this.parseResults.characters;
-          return '';
-        }
-        else if (ch2 === '\n') {
-          ++this.parseResults.characters;
-          ++this.sourceIndex;
-          ch += '\n';
-        }
+        return $[1];
       }
     }
+
+    ++this.parseResults.characters;
+    ch = ch || this.htmlSource.charAt(this.sourceIndex++);
+
+    if (ch === '\r') {
+      const ch2 = this.htmlSource.charAt(this.sourceIndex);
+
+      if (!ch2 && !this.htmlSourceIsFinal) {
+        // Special chunk boundary case.
+        this.putBacks.push('--' + ch);
+        --this.parseResults.characters;
+        return '';
+      }
+      else if (ch2 === '\n') {
+        ++this.parseResults.characters;
+        ++this.sourceIndex;
+        ch += '\n';
+      }
+    }
+
 
     if (isEol(ch)) {
       ++this.line;
@@ -903,7 +925,7 @@ export class HtmlParser {
 
     this.pendingSource = '';
 
-    while ((ch = this.getChar())) {
+    while ((ch = this.getChar(RE_TEXT))) {
       if (ch === '<') {
         const ch2 = this.getChar();
 
@@ -956,7 +978,7 @@ export class HtmlParser {
 
     let ch: string;
 
-    while (isAttributeNameChar(ch = this.getChar(), !this.xmlMode))
+    while (isAttributeNameChar(ch = this.getChar(RE_ATTRIB_NAME), !this.xmlMode))
       this.attribute += ch;
 
     this.putBack(ch);
@@ -968,7 +990,7 @@ export class HtmlParser {
     let ch: string;
     let afterSlash = false;
 
-    while ((ch = this.getChar()) && ch !== quote && (quote || (!isWhitespace(ch) && ch !== '>'))) {
+    while ((ch = this.getChar(regexForAttribValue[quote])) && ch !== quote && (quote || (!isWhitespace(ch) && ch !== '>'))) {
       value += ch;
       afterSlash = ch === '/';
     }
@@ -991,7 +1013,7 @@ export class HtmlParser {
     let ch: string;
 
     // noinspection DuplicatedCode
-    while ((ch = this.getChar())) {
+    while ((ch = this.getChar(stage === 0 ? RE_COMMENT : undefined))) {
       comment.push(ch);
 
       if (stage === 0 && ch === '-')
@@ -1041,7 +1063,7 @@ export class HtmlParser {
     let ch: string;
 
     // noinspection DuplicatedCode
-    while ((ch = this.getChar())) {
+    while ((ch = this.getChar(endStage === 0 ? RE_TEXT : undefined))) {
       content += ch;
 
       if (endStage >= len && ch === '>')
