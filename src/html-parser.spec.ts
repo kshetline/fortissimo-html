@@ -33,9 +33,9 @@ describe('html-parser', () => {
     expect(errors).equals(results.errors);
   });
 
-  it('should properly parse XHTML', () => {
+  it('should properly parse XHTML in fast mode', () => {
     const content = fs.readFileSync('./test/sample-w3c.html', 'utf-8');
-    const parser = new HtmlParser();
+    const parser = new HtmlParser({ fast: true });
     let docType: DocType;
     const results = parser.on('doctype', dt => docType = dt).parse(content);
     const reconstituted = results.domRoot.toString();

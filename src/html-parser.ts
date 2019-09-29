@@ -7,6 +7,7 @@ import { CData, ClosureState, CommentElement, CQ, DeclarationElement, DocType, D
 export interface HtmlParserOptions {
   emptyEndTag?: boolean;
   eol?: string | boolean;
+  fast?: boolean;
   tabSize?: number;
   xmlMode?: boolean;
 }
@@ -45,6 +46,30 @@ export enum State {
   IN_TEXT_AREA_ELEMENT,
 }
 
+const RE_WHITESPACE = /^([ \f]+)/;
+const RE_TEXT = /^([^<\t\n\r\uD800-\uDFFF]+)/;
+const RE_ATTRIB_NAME = /^([^=>\/\s\uD800-\uDFFF]+)/;
+const RE_COMMENT = /^([^->\t\n\r\uD800-\uDFFF]+)/;
+const RE_DECLARATION = /^([^>\t\n\r\uD800-\uDFFF]+)/;
+
+const RE_ATTRIB_VALUE: Record<string, RegExp> = {
+  '"': /^([^"\t\n\r\uD800-\uDFFF]+)/,
+  "'": /^([^'\t\n\r\uD800-\uDFFF]+)/,
+  '': /^([^=>\/\s\uD800-\uDFFF]+)/,
+};
+
+const RE_WHITESPACE_FAST = /^([ \t\n\f\r]+)/;
+const RE_TEXT_FAST = /^([^<]+)/;
+const RE_ATTRIB_NAME_FAST = /^([^=>\/\s]+)/;
+const RE_COMMENT_FAST = /^([^->]+)/;
+const RE_DECLARATION_FAST = /^([^>]+)/;
+
+const RE_ATTRIB_VALUE_FAST: Record<string, RegExp> = {
+  '"': /^([^"]+)/,
+  "'": /^([^']+)/,
+  '': /^([^=>\/\s]+)/,
+};
+
 type AttributeCallback = (leadingSpace: string, name: string, equalSign: string, value: string, quote: string) => void;
 type BasicCallback = (depth: number, text: string, terminated: boolean) => void;
 type CompletionCallback = (results?: ParseResults) => void;
@@ -82,18 +107,6 @@ export class HtmlParser {
     [State.IN_TEXT_AREA_ELEMENT]: 'textarea',
   };
 
-  protected static RE_WHITESPACE = /^([ \f]+)/;
-  protected static RE_TEXT = /^([^<\t\n\r\uD800-\uDFFF]+)/;
-  protected static RE_ATTRIB_NAME = /^([^=>\/\s\uD800-\uDFFF]+)/;
-  protected static RE_COMMENT = /^([^->\t\n\r\uD800-\uDFFF]+)/;
-  protected static RE_DECLARATION = /^([^>\t\n\r\uD800-\uDFFF]+)/;
-
-  protected static regexForAttribValue: Record<string, RegExp> = {
-    '"': /^([^"\t\n\r\uD800-\uDFFF]+)/,
-    "'": /^([^'\t\n\r\uD800-\uDFFF]+)/,
-    '': /^([^=>\/\s\uD800-\uDFFF]+)/,
-  };
-
   protected attribute = '';
   protected charset = '';
   protected callbacks = new Map<EventType, ParserCallback>();
@@ -105,6 +118,7 @@ export class HtmlParser {
   protected currentTag = '';
   protected currentTagLc = '';
   protected dom = new DomModel();
+  protected fast = HtmlParser.DEFAULT_OPTIONS.fast;
   protected htmlSource: string;
   protected htmlSourceIsFinal: boolean;
   protected leadingSpace = '';
@@ -119,6 +133,12 @@ export class HtmlParser {
   protected pendingReset = false;
   protected preEqualsSpace = '';
   protected putBacks: string[] = [];
+  protected reWhitespace: RegExp;
+  protected reText: RegExp;
+  protected reAttribName: RegExp;
+  protected reComment: RegExp;
+  protected reDeclaration: RegExp;
+  protected reAttribValue = RE_ATTRIB_VALUE;
   protected sourceIndex = 0;
   protected startTime: number;
   protected state = State.OUTSIDE_MARKUP;
@@ -228,6 +248,10 @@ export class HtmlParser {
 
   protected startParsing(source: string, isFinal: boolean): void {
     this.startTime = processMillis();
+
+    if (this.fast && this.options.eol)
+      source = source.replace(/\r\n|\r|\n/g, this.options.eol as string);
+
     this.parserRunning = true;
     this.htmlSource = source || '';
     this.htmlSourceIsFinal = isFinal;
@@ -241,7 +265,6 @@ export class HtmlParser {
 
     this.checkEncoding(this.htmlSource);
   }
-
 
   parse(source: string): ParseResults {
     this.startParsing(source, true);
@@ -828,13 +851,15 @@ export class HtmlParser {
       else {
         this.pendingSource += ch;
 
-        if (isEol(ch)) {
-          ++this.line;
-          this.column = 0;
-        }
-        else {
-          this.column += this.columnIncrement;
-          this.columnIncrement = (ch === '\t' ? this.tabSize - (this.column - 1) % this.tabSize : 1);
+        if (!this.fast) {
+          if (isEol(ch)) {
+            ++this.line;
+            this.column = 0;
+          }
+          else {
+            this.column += this.columnIncrement;
+            this.columnIncrement = (ch === '\t' ? this.tabSize - (this.column - 1) % this.tabSize : 1);
+          }
         }
 
         return ch;
@@ -858,7 +883,7 @@ export class HtmlParser {
     ++this.parseResults.characters;
     ch = ch || this.htmlSource.charAt(this.sourceIndex++);
 
-    if (ch === '\r') {
+    if (!this.fast && ch === '\r') {
       const ch2 = this.htmlSource.charAt(this.sourceIndex);
 
       if (!ch2 && !this.htmlSourceIsFinal) {
@@ -874,37 +899,38 @@ export class HtmlParser {
       }
     }
 
+    if (!this.fast) {
+      if (isEol(ch)) {
+        ++this.line;
+        this.column = 0;
 
-    if (isEol(ch)) {
-      ++this.line;
-      this.column = 0;
+        if (this.options.eol)
+          ch = this.options.eol as string;
+      }
+      else {
+        const cp = ch.charCodeAt(0);
 
-      if (this.options.eol)
-        ch = this.options.eol as string;
-    }
-    else {
-      const cp = ch.charCodeAt(0);
+        this.column += this.columnIncrement;
+        this.columnIncrement = (ch === '\t' ? this.tabSize - (this.column - 1) % this.tabSize : 1);
 
-      this.column += this.columnIncrement;
-      this.columnIncrement = (ch === '\t' ? this.tabSize - (this.column - 1) % this.tabSize : 1);
+        // Test for high surrogate
+        if (0xD800 <= cp && cp <= 0xDBFF) {
+          const ch2 = this.htmlSource.charAt(this.sourceIndex);
 
-      // Test for high surrogate
-      if (0xD800 <= cp && cp <= 0xDBFF) {
-        const ch2 = this.htmlSource.charAt(this.sourceIndex);
+          if (!ch2 && !this.htmlSourceIsFinal) {
+            // Special chunk boundary case.
+            this.putBacks.push('--' + ch);
+            --this.parseResults.characters;
+            return '';
+          }
+          else {
+            const cp2 = ch2.charCodeAt(0);
 
-        if (!ch2 && !this.htmlSourceIsFinal) {
-          // Special chunk boundary case.
-          this.putBacks.push('--' + ch);
-          --this.parseResults.characters;
-          return '';
-        }
-        else {
-          const cp2 = ch2.charCodeAt(0);
-
-          // Test for low surrogate
-          if (0xDC00 <= cp2 && cp2 <= 0xDFFF) {
-            ++this.sourceIndex;
-            ch += ch2;
+            // Test for low surrogate
+            if (0xDC00 <= cp2 && cp2 <= 0xDFFF) {
+              ++this.sourceIndex;
+              ch += ch2;
+            }
           }
         }
       }
@@ -928,7 +954,7 @@ export class HtmlParser {
   private gatherWhitespace(ch: string): string {
     while (ch.length > 1 || isWhitespace(ch)) {
       this.collectedSpace += ch;
-      ch = this.getChar(HtmlParser.RE_WHITESPACE);
+      ch = this.getChar(this.reWhitespace);
     }
 
     return ch;
@@ -940,7 +966,7 @@ export class HtmlParser {
 
     this.pendingSource = '';
 
-    while ((ch = this.getChar(HtmlParser.RE_TEXT))) {
+    while ((ch = this.getChar(this.reText))) {
       if (ch === '<') {
         const ch2 = this.getChar();
 
@@ -993,7 +1019,7 @@ export class HtmlParser {
 
     let ch: string;
 
-    while (isAttributeNameChar(ch = this.getChar(HtmlParser.RE_ATTRIB_NAME), !this.xmlMode))
+    while (isAttributeNameChar(ch = this.getChar(this.reAttribName), !this.xmlMode))
       this.attribute += ch;
 
     this.putBack(ch);
@@ -1005,7 +1031,7 @@ export class HtmlParser {
     let ch: string;
     let afterSlash = false;
 
-    while ((ch = this.getChar(HtmlParser.regexForAttribValue[quote])) &&
+    while ((ch = this.getChar(this.reAttribValue[quote])) &&
            ch !== quote && (quote || (!isWhitespace(ch) && ch !== '>'))) {
       value += ch;
       afterSlash = ch === '/';
@@ -1029,7 +1055,7 @@ export class HtmlParser {
     let ch: string;
 
     // noinspection DuplicatedCode
-    while ((ch = this.getChar(stage === 0 ? HtmlParser.RE_COMMENT : undefined))) {
+    while ((ch = this.getChar(stage === 0 ? this.reComment : undefined))) {
       comment.push(ch);
 
       if (stage === 0 && ch === '-')
@@ -1057,7 +1083,7 @@ export class HtmlParser {
     let cdataDetected = false;
 
     // noinspection DuplicatedCode
-    while ((ch = this.getChar(checkForCData ? undefined : HtmlParser.RE_DECLARATION))) {
+    while ((ch = this.getChar(checkForCData ? undefined : this.reDeclaration))) {
       if (checkForCData && content.length === 7) {
         cdataDetected = (content === '[CDATA[');
         checkForCData = false;
@@ -1080,7 +1106,7 @@ export class HtmlParser {
     let ch: string;
 
     // noinspection DuplicatedCode
-    while ((ch = this.getChar(endStage === 0 ? HtmlParser.RE_TEXT : undefined))) {
+    while ((ch = this.getChar(endStage === 0 ? this.reText : undefined))) {
       content += ch;
 
       if (endStage >= len && ch === '>')
@@ -1122,6 +1148,24 @@ export class HtmlParser {
       }
     }
 
+    this.fast = this.options.fast;
     this.tabSize = this.options.tabSize;
+
+    if (this.fast) {
+      this.reWhitespace = RE_WHITESPACE_FAST;
+      this.reText = RE_TEXT_FAST;
+      this.reAttribName = RE_ATTRIB_NAME_FAST;
+      this.reComment = RE_COMMENT_FAST;
+      this.reDeclaration = RE_DECLARATION_FAST;
+      this.reAttribValue = RE_ATTRIB_VALUE_FAST;
+    }
+    else {
+      this.reWhitespace = RE_WHITESPACE;
+      this.reText = RE_TEXT;
+      this.reAttribName = RE_ATTRIB_NAME;
+      this.reComment = RE_COMMENT;
+      this.reDeclaration = RE_DECLARATION;
+      this.reAttribValue = RE_ATTRIB_VALUE;
+    }
   }
 }

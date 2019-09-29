@@ -68,6 +68,9 @@ export class HtmlParserAsync extends HtmlParser {
     if (this.htmlSourceIsFinal || this.nextChunkIsFinal)
       throw new Error('Parser will no longer accept additional input');
 
+    if (this.fast && this.options.eol)
+      chunk = chunk.replace(/\r\n|\r|\n/g, this.options.eol as string);
+
     this.nextChunkIsFinal = isFinal || !chunk;
 
     if (this.resolveNextChunk) {
@@ -284,7 +287,7 @@ export class HtmlParserAsync extends HtmlParser {
   private async gatherWhitespaceAsync(ch: string): Promise<string> {
     while (ch.length > 1 || isWhitespace(ch)) {
       this.collectedSpace += ch;
-      ch = this.getChar(HtmlParser.RE_WHITESPACE) || await this.getNextChunkChar();
+      ch = this.getChar(this.reWhitespace) || await this.getNextChunkChar();
     }
 
     return ch;
@@ -296,7 +299,7 @@ export class HtmlParserAsync extends HtmlParser {
 
     this.pendingSource = '';
 
-    while ((ch = this.getChar(HtmlParser.RE_TEXT) || await this.getNextChunkChar())) {
+    while ((ch = this.getChar(this.reText) || await this.getNextChunkChar())) {
       if (ch === '<') {
         const ch2 = this.getChar() || await this.getNextChunkChar();
 
@@ -348,7 +351,7 @@ export class HtmlParserAsync extends HtmlParser {
 
     let ch: string;
 
-    while (isAttributeNameChar(ch = this.getChar(HtmlParser.RE_ATTRIB_NAME) ||
+    while (isAttributeNameChar(ch = this.getChar(this.reAttribName) ||
            await this.getNextChunkChar(), !this.xmlMode))
       this.attribute += ch;
 
@@ -361,7 +364,7 @@ export class HtmlParserAsync extends HtmlParser {
     let ch: string;
     let afterSlash = false;
 
-    while ((ch = this.getChar(HtmlParser.regexForAttribValue[quote]) ||
+    while ((ch = this.getChar(this.reAttribValue[quote]) ||
            await this.getNextChunkChar()) && ch !== quote && (quote || (!isWhitespace(ch) && ch !== '>'))) {
       value += ch;
       afterSlash = ch === '/';
@@ -385,7 +388,7 @@ export class HtmlParserAsync extends HtmlParser {
     let ch: string;
 
     // noinspection DuplicatedCode
-    while ((ch = this.getChar(stage === 0 ? HtmlParser.RE_COMMENT : undefined) || await this.getNextChunkChar())) {
+    while ((ch = this.getChar(stage === 0 ? this.reComment : undefined) || await this.getNextChunkChar())) {
       comment.push(ch);
 
       if (stage === 0 && ch === '-')
@@ -414,7 +417,7 @@ export class HtmlParserAsync extends HtmlParser {
     let cdataDetected = false;
 
     // noinspection DuplicatedCode
-    while ((ch = this.getChar(checkForCData ? undefined : HtmlParser.RE_DECLARATION) ||
+    while ((ch = this.getChar(checkForCData ? undefined : this.reDeclaration) ||
            await this.getNextChunkChar())) {
       if (checkForCData && content.length === 7) {
         cdataDetected = (content === '[CDATA[');
@@ -437,7 +440,7 @@ export class HtmlParserAsync extends HtmlParser {
     let ch: string;
 
     // noinspection DuplicatedCode
-    while ((ch = this.getChar(endStage === 0 ? HtmlParser.RE_TEXT : undefined) || await this.getNextChunkChar())) {
+    while ((ch = this.getChar(endStage === 0 ? this.reText : undefined) || await this.getNextChunkChar())) {
       content += ch;
 
       if (endStage >= len && ch === '>')
