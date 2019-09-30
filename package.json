@@ -1,10 +1,9 @@
 {
-  "name": "fffhtml",
+  "name": "fortissimo-html",
   "version": "1.0.0",
-  "description": "Fast, Forgiving, Formatting HTML Parser",
-  "main": "dist/index.js",
+  "description": "Fortissimo HTML - Flexible, Forgiving, Formatting HTML Parser",
+  "main": "dist/src/index.js",
   "scripts": {
-    "start": "tsc && node dist/index.js",
     "test": "nyc mocha --require ts-node/register src/**/*.spec.ts",
     "test-dev": "mocha --require ts-node/register -w --watch-extensions ts src/**/*.spec.ts",
     "test-debug": "nyc mocha --timeout 1800000 --require ts-node/register src/**/*.spec.ts",
@@ -20,6 +19,7 @@
     "exclude": [
       "**/*.d.ts",
       "**/*.spec.ts",
+      "src/cli.ts",
       "src/index.ts",
       "src/platform-specifics.ts"
     ],
@@ -39,18 +39,23 @@
   },
   "keywords": [
     "html",
-    "parse"
+    "parse",
+    "format",
+    "reformat",
+    "syntax",
+    "highlighting",
+    "fortissimo"
   ],
   "author": "Kerry Shetline <kerry@shetline.com>",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/kshetline/by-request.git"
+    "url": "https://github.com/kshetline/fortissimo-html.git"
   },
   "engines": {
     "node": ">=6.5.0"
   },
-  "bin": "./dist/index.js",
+  "bin": "./dist/src/cli.js",
   "dependencies": {
     "commander": "^3.0.2",
     "fast-glob": "^3.0.4",

@@ -333,7 +333,7 @@ export class HtmlParserAsync extends HtmlParser {
 
     let ch: string;
 
-    while (isPCENChar(ch = this.getChar() || await this.getNextChunkChar(), !this.xmlMode))
+    while (isPCENChar(ch = this.getChar() || await this.getNextChunkChar(), this.fast || !this.xmlMode))
       this.currentTag += ch;
 
     this.currentTagLc = this.xmlMode ? this.currentTag : this.currentTag.toLowerCase();
@@ -352,7 +352,7 @@ export class HtmlParserAsync extends HtmlParser {
     let ch: string;
 
     while (isAttributeNameChar(ch = this.getChar(this.reAttribName) ||
-           await this.getNextChunkChar(), !this.xmlMode))
+           await this.getNextChunkChar(), this.fast || !this.xmlMode))
       this.attribute += ch;
 
     this.putBack(ch);

@@ -578,7 +578,7 @@ export class HtmlParser {
         this.doAttributeCallback('', '', '');
         this.state = State.AT_ATTRIBUTE_START;
       }
-      else if (isAttributeNameChar(ch, !this.xmlMode)) {
+      else if (isAttributeNameChar(ch, this.fast || !this.xmlMode)) {
         this.leadingSpace = this.collectedSpace;
         this.collectedSpace = '';
         this.state = State.AT_ATTRIBUTE_ASSIGNMENT;
@@ -1000,7 +1000,7 @@ export class HtmlParser {
 
     let ch: string;
 
-    while (isPCENChar(ch = this.getChar(), !this.xmlMode))
+    while (isPCENChar(ch = this.getChar(), this.fast || !this.xmlMode))
       tag.push(ch);
 
     this.currentTag = tag.join('');
@@ -1019,7 +1019,7 @@ export class HtmlParser {
 
     let ch: string;
 
-    while (isAttributeNameChar(ch = this.getChar(this.reAttribName), !this.xmlMode))
+    while (isAttributeNameChar(ch = this.getChar(this.reAttribName), this.fast || !this.xmlMode))
       this.attribute += ch;
 
     this.putBack(ch);
