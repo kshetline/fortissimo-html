@@ -9,7 +9,7 @@ let speedFast: number;
 
 function first(done: () => void) {
   const bench = benchmark((html: string, callback: any) => {
-    const parser = new HtmlParser({ fast: true });
+    const parser = new HtmlParser({ fast: true, eol: false });
 
     parser
       .on('completion', () => callback())
@@ -94,4 +94,5 @@ first(() => second(() => third(() => fast(() => {
   console.log('fortissimo std is   %s% of the speed of fast-html', prec3(speedFortStd / speedFast * 100));
   console.log('fortissimo async is %s% of the speed of fast-html', prec3(speedFortAsync / speedFast * 100));
   console.log('fortissimo std is   %s% of the speed of fortissimo fast', prec3(speedFortStd / speedFortFast * 100));
+  console.log('fortissimo async is %s% of the speed of fortissimo fast', prec3(speedFortAsync / speedFortFast * 100));
 }))));

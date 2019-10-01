@@ -62,15 +62,9 @@ const RE_ATTRIB_VALUE: Record<string, RegExp> = {
 
 const RE_WHITESPACE_FAST = /^([ \t\n\f\r]+)/;
 const RE_TEXT_FAST = /^([^<]+)/;
-const RE_ATTRIB_NAME_FAST = /^([^=>\/\s]+)/;
 const RE_COMMENT_FAST = /^([^->]+)/;
 const RE_DECLARATION_FAST = /^([^>]+)/;
-
-const RE_ATTRIB_VALUE_FAST: Record<string, RegExp> = {
-  '"': /^([^"]+)/,
-  "'": /^([^']+)/,
-  '': /^([^=>\/\s]+)/,
-};
+const RE_TAG_FAST = /^([^>]+>)/;
 
 type AttributeCallback = (leadingSpace: string, name: string, equalSign: string, value: string, quote: string) => void;
 type BasicCallback = (depth: number, text: string, terminated: boolean) => void;
@@ -93,62 +87,61 @@ const CAN_BE_HANDLED_GENERICALLY = new Set(['attribute', 'cdata', 'comment', 'de
                                             'processing', 'start-tag-end', 'start-tag-start', 'text']);
 
 export class HtmlParser {
-  protected static TEXT_STARTERS =
+  private static TEXT_STARTERS =
     new Set<State>([State.OUTSIDE_MARKUP, State.IN_SCRIPT_ELEMENT, State.IN_STYLE_ELEMENT, State.IN_TEXT_AREA_ELEMENT]);
 
-  protected static DEFAULT_OPTIONS: HtmlParserOptions = {
+  private static DEFAULT_OPTIONS: HtmlParserOptions = {
     emptyEndTag: true,
     eol: '\n',
     tabSize: 8,
     xmlMode: false,
   };
 
-  protected static tagForState = {
+  private static tagForState = {
     [State.IN_SCRIPT_ELEMENT]: 'script',
     [State.IN_STYLE_ELEMENT]: 'style',
     [State.IN_TEXT_AREA_ELEMENT]: 'textarea',
   };
 
-  protected attribute = '';
-  protected charset = '';
-  protected callbacks = new Map<EventType, ParserCallback>();
-  protected checkingCharset = false;
-  protected collectedSpace = '';
-  protected column = 0;
-  protected columnIncrement = 1;
-  protected contentType = false;
-  protected currentTag = '';
-  protected currentTagLc = '';
-  protected dom = new DomModel();
-  protected fast = HtmlParser.DEFAULT_OPTIONS.fast;
-  protected htmlSource: string;
-  protected leadingSpace = '';
-  protected line = 1;
-  protected markupColumn: number;
-  protected markupLine: number;
+  private attribute = '';
+  private charset = '';
+  private callbacks = new Map<EventType, ParserCallback>();
+  private checkingCharset = false;
+  private collectedSpace = '';
+  private column = 0;
+  private columnIncrement = 1;
+  private contentType = false;
+  private currentTag = '';
+  private currentTagLc = '';
+  private dom = new DomModel();
+  private fast = HtmlParser.DEFAULT_OPTIONS.fast;
+  private htmlSource: string;
+  private leadingSpace = '';
+  private line = 1;
+  private markupColumn: number;
+  private markupLine: number;
   readonly options: HtmlParserOptions;
-  protected parseResults: ParseResults;
-  protected parserRunning = false;
-  protected pendingCharset = '';
-  protected pendingSource = '';
-  protected pendingReset = false;
-  protected preEqualsSpace = '';
-  protected putBacks: string[] = [];
-  protected reWhitespace: RegExp;
-  protected reText: RegExp;
-  protected reAttribName: RegExp;
-  protected reComment: RegExp;
-  protected reDeclaration: RegExp;
-  protected reAttribValue = RE_ATTRIB_VALUE;
-  protected sourceIndex = 0;
-  protected startTime: number;
-  protected state = State.OUTSIDE_MARKUP;
-  protected stopped = false;
-  protected tabSize = HtmlParser.DEFAULT_OPTIONS.tabSize;
-  protected textColumn: number;
-  protected textLine: number;
-  protected xmlMode = false;
-  protected yieldTime = 0;
+  private parseResults: ParseResults;
+  private parserRunning = false;
+  private pendingCharset = '';
+  private pendingSource = '';
+  private pendingReset = false;
+  private preEqualsSpace = '';
+  private putBacks: string[] = [];
+  private reWhitespace: RegExp;
+  private reText: RegExp;
+  private reComment: RegExp;
+  private reDeclaration: RegExp;
+  private reAttribValue = RE_ATTRIB_VALUE;
+  private sourceIndex = 0;
+  private startTime: number;
+  private state = State.OUTSIDE_MARKUP;
+  private stopped = false;
+  private tabSize = HtmlParser.DEFAULT_OPTIONS.tabSize;
+  private textColumn: number;
+  private textLine: number;
+  private xmlMode = false;
+  private yieldTime = 0;
 
   constructor(
     options = HtmlParser.DEFAULT_OPTIONS
@@ -184,7 +177,7 @@ export class HtmlParser {
     return this.on(event as any, null);
   }
 
-  protected callback(event: EventType, ...args: any): boolean | void {
+  private callback(event: EventType, ...args: any): boolean | void {
     if (!this.parserRunning && event !== 'completion')
       return false;
 
@@ -246,7 +239,7 @@ export class HtmlParser {
     this.xmlMode = this.options.xmlMode;
   }
 
-  protected startParsing(source: string): void {
+  private startParsing(source: string): void {
     this.startTime = processMillis();
 
     if (this.fast && this.options.eol)
@@ -305,7 +298,7 @@ export class HtmlParser {
     });
   }
 
-  protected checkEncoding(firstChars: string): void {
+  private checkEncoding(firstChars: string): void {
     let encoding: string;
 
     if (/^(\x00\x00\xFE\xFF|\x00\x00\x00[\x01-\xFF]\x00\x00\x00[\x01-\xFF])/.test(firstChars))
@@ -357,8 +350,12 @@ export class HtmlParser {
         break;
 
         case State.AT_START_TAG_START:
-          this.gatherTagName(ch);
-          this.handleStartTagStart();
+          if (this.fast)
+            this.handleFullTag(ch);
+          else {
+            this.gatherTagName(ch);
+            this.handleStartTagStart();
+          }
         break;
 
         case State.AT_END_TAG_START:
@@ -414,7 +411,7 @@ export class HtmlParser {
             let value;
             [value, terminated] = this.gatherAttributeValue(quote, quote ? '' : ch);
 
-            if (this.handleAttributeValueStepTwo(ch, quote, value, terminated))
+            if (this.handleAttributeValueStepTwo(quote, value, terminated))
               return;
           }
 
@@ -462,7 +459,7 @@ export class HtmlParser {
     this.parseLoopWrapUp();
   }
 
-  protected parseLoopWrapUp(): void {
+  private parseLoopWrapUp(): void {
     if (this.state !== State.OUTSIDE_MARKUP) {
       ++this.parseResults.errors;
 
@@ -508,7 +505,7 @@ export class HtmlParser {
     this.parserRunning = false;
   }
 
-  protected handleText(text: string): void {
+  private handleText(text: string): void {
     if (text) {
       this.dom.addChild(new TextElement(text, this.textLine, this.textColumn, true));
       this.pendingSource = this.atEOF() && this.putBacks.length === 0 ? '' : '<';
@@ -520,7 +517,7 @@ export class HtmlParser {
     this.state = State.AT_MARKUP_START;
   }
 
-  protected handleMarkupStart(ch: string): void {
+  private handleMarkupStart(ch: string): void {
     this.markupLine = this.line;
     this.markupColumn = this.column - 1;
 
@@ -541,7 +538,50 @@ export class HtmlParser {
     }
   }
 
-  protected handleStartTagStart(): void {
+  private handleFullTag(init: string): void {
+    let fullTag = init + this.getChar(RE_TAG_FAST);
+    const end = (/(\/>|>)$/.exec(fullTag) || [''])[0];
+
+    if (end)
+      fullTag = fullTag.substr(0, fullTag.length - end.length);
+
+    // noinspection JSUnusedLocalSymbols
+    const [$0, tag, attribs] = /(\S+)(.*)/.exec(fullTag);
+    this.currentTag = tag;
+    this.currentTagLc = tag.toLowerCase();
+    const node = new DomNode(this.currentTagLc, 0, 0);
+
+    this.dom.prePush(node);
+    this.dom.addChild(node);
+    this.dom.push(node);
+    this.callback('start-tag-start', this.dom.getDepth(), tag);
+
+    this.collectedSpace = attribs.replace(/(\s+)([^=\s]+)(?:(\s*=\s*)("[^"]*"?|'[^']*'?|\S*)?)?/g,
+        (_, lead, attrib, equals, value) => {
+      let quote: string;
+
+      value = value || '';
+
+      if (value.startsWith('"')) {
+        quote = value.endsWith('"') ? '"' : '_"';
+        value = value.replace(/"/g, '');
+      }
+      else if (value.startsWith("'")) {
+        quote = value.endsWith("'") ? "'" : "_'";
+        value = value.replace(/'/g, '');
+      }
+
+      this.dom.addAttribute(attrib, value, lead, equals, quote);
+      this.attribute = attrib;
+      this.doAttributeCallback(equals, value, quote);
+
+      return '';
+    });
+
+    this.handleAttributeStart('>', end);
+  }
+
+  private handleStartTagStart(): void {
     const node = new DomNode(this.currentTag, this.markupLine, this.markupColumn);
 
     this.dom.prePush(node);
@@ -555,7 +595,7 @@ export class HtmlParser {
     this.state = State.AT_ATTRIBUTE_START;
   }
 
-  protected handleEndTag(ch: string): boolean {
+  private handleEndTag(ch: string): boolean {
     let invalidEnding = false;
 
     if (ch !== '>') {
@@ -590,7 +630,7 @@ export class HtmlParser {
     return invalidEnding;
   }
 
-  protected handleAttributeStart(ch: string, end: string): boolean {
+  private handleAttributeStart(ch: string, end: string): boolean {
     let getAttribName = false;
 
     if (ch !== '>') {
@@ -604,7 +644,7 @@ export class HtmlParser {
         this.doAttributeCallback('', '', '');
         this.state = State.AT_ATTRIBUTE_START;
       }
-      else if (isAttributeNameChar(ch, this.fast || !this.xmlMode)) {
+      else if (isAttributeNameChar(ch, !this.xmlMode)) {
         this.leadingSpace = this.collectedSpace;
         this.collectedSpace = '';
         this.state = State.AT_ATTRIBUTE_ASSIGNMENT;
@@ -643,7 +683,7 @@ export class HtmlParser {
     return getAttribName;
   }
 
-  protected handleAttributeAssignment(ch: string): void {
+  private handleAttributeAssignment(ch: string): void {
     if (ch === '=') {
       this.preEqualsSpace = this.collectedSpace;
       this.collectedSpace = '';
@@ -657,7 +697,7 @@ export class HtmlParser {
     }
   }
 
-  protected handleAttributeValueStepOne(ch: string): string {
+  private handleAttributeValueStepOne(ch: string): string {
     if (ch === '>') {
       const equals = this.preEqualsSpace + '=';
 
@@ -671,7 +711,7 @@ export class HtmlParser {
     return (ch === '"' || ch === "'") ? ch : '';
   }
 
-  protected handleAttributeValueStepTwo(ch: string, quote: string, value: string, terminated: boolean): boolean {
+  private handleAttributeValueStepTwo(quote: string, value: string, terminated: boolean): boolean {
     const equals = this.preEqualsSpace + '=' + this.collectedSpace;
 
     quote = (terminated ? '' : '_') + quote;
@@ -713,7 +753,7 @@ export class HtmlParser {
     return false;
   }
 
-  protected handleDeclarationStartStepOne(ch: string): boolean {
+  private handleDeclarationStartStepOne(ch: string): boolean {
     if (this.collectedSpace.length === 0 && ch === '-') {
       const ch2 = this.getChar();
 
@@ -730,7 +770,7 @@ export class HtmlParser {
   }
 
 
-  protected handleDeclarationStartStepTwo(content: string, terminated: boolean, isCData: boolean): void {
+  private handleDeclarationStartStepTwo(content: string, terminated: boolean, isCData: boolean): void {
     if (isCData) {
       this.dom.addChild(new CData(content, this.markupLine, this.markupColumn, terminated));
 
@@ -770,7 +810,7 @@ export class HtmlParser {
     this.state = State.OUTSIDE_MARKUP;
   }
 
-  protected handleProcessingStart(content: string, terminated: boolean): void {
+  private handleProcessingStart(content: string, terminated: boolean): void {
     this.dom.addChild(new ProcessingElement(content, this.markupLine, this.markupColumn, terminated));
 
     if (!terminated)
@@ -789,7 +829,7 @@ export class HtmlParser {
     this.state = State.OUTSIDE_MARKUP;
   }
 
-  protected handleCommentStart(content: string, terminated: boolean): void {
+  private handleCommentStart(content: string, terminated: boolean): void {
     this.dom.addChild(new CommentElement(content, this.markupLine, this.markupColumn, terminated));
 
     if (!terminated)
@@ -803,7 +843,7 @@ export class HtmlParser {
     this.state = State.OUTSIDE_MARKUP;
   }
 
-  protected handleTextBlockElements(tag: string, content: string, endTag: string, terminated: boolean): void {
+  private handleTextBlockElements(tag: string, content: string, endTag: string, terminated: boolean): void {
     if (!terminated) {
       this.reportError(`File ended in unterminated <${tag}> section`, false);
       this.dom.getCurrentNode().closureState = ClosureState.UNCLOSED;
@@ -826,14 +866,14 @@ export class HtmlParser {
     this.state = State.OUTSIDE_MARKUP;
   }
 
-  protected pop(tagLc: string, endTagText = '') {
+  private pop(tagLc: string, endTagText = '') {
     if (!this.dom.pop(tagLc, endTagText, this.markupLine, this.markupColumn)) {
       ++this.parseResults.errors;
       this.callback('error', `Unmatched closing tag </${tagLc}>`, this.line, this.column, '');
     }
   }
 
-  protected reportError(message: string, reportPending = true) {
+  private reportError(message: string, reportPending = true) {
     ++this.parseResults.errors;
     this.callback('error', message, this.line, this.column, reportPending ? this.pendingSource : '');
     this.state = State.OUTSIDE_MARKUP;
@@ -841,23 +881,23 @@ export class HtmlParser {
     this.pendingSource = '';
   }
 
-  protected doEndTagCallback(tag: string, trailingContent: string) {
+  private doEndTagCallback(tag: string, trailingContent: string) {
     this.callback('end-tag', this.dom.getDepth() + 1, tag, trailingContent);
     this.state = State.OUTSIDE_MARKUP;
     this.collectedSpace = '';
     this.pendingSource = '';
   }
 
-  protected doAttributeCallback(equalSign: string, value: string, quote: string): void {
+  private doAttributeCallback(equalSign: string, value: string, quote: string): void {
     this.callback('attribute', this.leadingSpace, this.attribute, equalSign, value, quote);
     this.pendingSource = '';
   }
 
-  protected atEOF(): boolean {
+  private atEOF(): boolean {
     return this.sourceIndex >= (this.htmlSource || '').length;
   }
 
-  protected getChar(multi?: RegExp): string {
+  private getChar(multi?: RegExp): string {
     let ch: string;
 
     if (this.putBacks.length > 0) {
@@ -942,7 +982,7 @@ export class HtmlParser {
     return ch;
   }
 
-  protected putBack(ch: string): void {
+  private putBack(ch: string): void {
     this.putBacks.push(ch);
     this.pendingSource = this.pendingSource.substr(0, this.pendingSource.length - ch.length);
 
@@ -1001,7 +1041,7 @@ export class HtmlParser {
 
     let ch: string;
 
-    while (isPCENChar(ch = this.getChar(), this.fast || !this.xmlMode))
+    while (isPCENChar(ch = this.getChar(), !this.xmlMode))
       tag.push(ch);
 
     this.currentTag = tag.join('');
@@ -1020,7 +1060,7 @@ export class HtmlParser {
 
     let ch: string;
 
-    while (isAttributeNameChar(ch = this.getChar(this.reAttribName), this.fast || !this.xmlMode))
+    while (isAttributeNameChar(ch = this.getChar(RE_ATTRIB_NAME), !this.xmlMode))
       this.attribute += ch;
 
     this.putBack(ch);
@@ -1126,7 +1166,7 @@ export class HtmlParser {
     return [content, '', false];
   }
 
-  protected adjustOptions(): void {
+  private adjustOptions(): void {
     if (this.options.eol) {
       switch (this.options.eol) {
         case true:
@@ -1152,18 +1192,14 @@ export class HtmlParser {
     if (this.fast) {
       this.reWhitespace = RE_WHITESPACE_FAST;
       this.reText = RE_TEXT_FAST;
-      this.reAttribName = RE_ATTRIB_NAME_FAST;
       this.reComment = RE_COMMENT_FAST;
       this.reDeclaration = RE_DECLARATION_FAST;
-      this.reAttribValue = RE_ATTRIB_VALUE_FAST;
     }
     else {
       this.reWhitespace = RE_WHITESPACE;
       this.reText = RE_TEXT;
-      this.reAttribName = RE_ATTRIB_NAME;
       this.reComment = RE_COMMENT;
       this.reDeclaration = RE_DECLARATION;
-      this.reAttribValue = RE_ATTRIB_VALUE;
     }
   }
 }
