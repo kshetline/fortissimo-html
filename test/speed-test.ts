@@ -1,9 +1,10 @@
 import benchmark from 'htmlparser-benchmark';
-import { HtmlParser } from '../src/html-parser';
+import { HtmlParser } from '../src';
 import * as FastHtmlParser from 'fast-html-parser';
 
 let speedFortFast: number;
 let speedFortStd: number;
+let speedFortAsync: number;
 let speedFast: number;
 
 function first(done: () => void) {
@@ -48,6 +49,26 @@ function second(done: () => void) {
 
 function third(done: () => void) {
   const bench = benchmark((html: string, callback: any) => {
+    const parser = new HtmlParser();
+
+    return parser
+      .on('completion', () => callback())
+      .on('error', err => {
+        if (!/^(unmatched closing tag|syntax error)/i.test(err))
+          callback(err);
+      })
+      .parseAsync(html);
+  });
+
+  bench.on('result', (stat: any) => {
+    speedFortAsync = stat.mean();
+    console.log('fortissimo, async: ' + stat.mean().toPrecision(6) + ' ms/file ± ' + stat.sd().toPrecision(6));
+    done();
+  });
+}
+
+function fast(done: () => void) {
+  const bench = benchmark((html: string, callback: any) => {
     FastHtmlParser.parse(html);
     callback();
   });
@@ -59,8 +80,18 @@ function third(done: () => void) {
   });
 }
 
-first(() => second(() => third(() => {
-  console.log('\nfortissimo fast is %s% of the speed of fast-html', (speedFortFast / speedFast * 100).toPrecision(3));
-  console.log('fortissimo std is %s% of the speed of fast-html', (speedFortStd / speedFast * 100).toPrecision(3));
-  console.log('fortissimo std is %s% of the speed of fortissimo fast', (speedFortStd / speedFortFast * 100).toPrecision(3));
-})));
+function prec3(n: number): string {
+  let s = n.toPrecision(3);
+
+  if (s.includes('e+'))
+    s = parseFloat(s).toFixed(0);
+
+  return s;
+}
+
+first(() => second(() => third(() => fast(() => {
+  console.log('\nfortissimo fast is  %s% of the speed of fast-html', prec3(speedFortFast / speedFast * 100));
+  console.log('fortissimo std is   %s% of the speed of fast-html', prec3(speedFortStd / speedFast * 100));
+  console.log('fortissimo async is %s% of the speed of fast-html', prec3(speedFortAsync / speedFast * 100));
+  console.log('fortissimo std is   %s% of the speed of fortissimo fast', prec3(speedFortStd / speedFortFast * 100));
+}))));
