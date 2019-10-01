@@ -93,8 +93,9 @@ export class HtmlParser {
   private static DEFAULT_OPTIONS: HtmlParserOptions = {
     emptyEndTag: true,
     eol: '\n',
+    fast: false,
     tabSize: 8,
-    xmlMode: false,
+    xmlMode: false
   };
 
   private static tagForState = {
@@ -133,7 +134,6 @@ export class HtmlParser {
   private reComment: RegExp;
   private reDeclaration: RegExp;
   private reAttribValue = RE_ATTRIB_VALUE;
-  private sourceIndex = 0;
   private startTime: number;
   private state = State.OUTSIDE_MARKUP;
   private stopped = false;
@@ -143,10 +143,13 @@ export class HtmlParser {
   private xmlMode = false;
   private yieldTime = 0;
 
-  constructor(
-    options = HtmlParser.DEFAULT_OPTIONS
-  ) {
+  constructor(options?: HtmlParserOptions) {
     this.options = {};
+    Object.assign(this.options, HtmlParser.DEFAULT_OPTIONS);
+
+    if (options && options.fast)
+      this.options.eol = false;
+
     Object.assign(this.options, options);
     this.adjustOptions();
     this.xmlMode = this.options.xmlMode;
@@ -233,7 +236,6 @@ export class HtmlParser {
     this.pendingReset = false;
     this.pendingSource = '';
     this.putBacks = [];
-    this.sourceIndex = 0;
     this.stopped = false;
     this.state = State.OUTSIDE_MARKUP;
     this.xmlMode = this.options.xmlMode;
@@ -249,7 +251,6 @@ export class HtmlParser {
     this.htmlSource = source || '';
     this.pendingSource = '';
     this.putBacks = [];
-    this.sourceIndex = 0;
     this.state = State.OUTSIDE_MARKUP;
     this.dom = new DomModel();
     this.parseResults = new ParseResults();
@@ -545,8 +546,9 @@ export class HtmlParser {
     if (end)
       fullTag = fullTag.substr(0, fullTag.length - end.length);
 
-    // noinspection JSUnusedLocalSymbols
-    const [$0, tag, attribs] = /(\S+)(.*)/.exec(fullTag);
+    let $0, tag, attribs;
+    // noinspection JSUnusedAssignment
+    [$0, tag, attribs, this.collectedSpace] = /^(\S+)(.*?)(\s*)$/s.exec(fullTag);
     this.currentTag = tag;
     this.currentTagLc = tag.toLowerCase();
     const node = new DomNode(this.currentTagLc, 0, 0);
@@ -556,10 +558,11 @@ export class HtmlParser {
     this.dom.push(node);
     this.callback('start-tag-start', this.dom.getDepth(), tag);
 
-    this.collectedSpace = attribs.replace(/(\s+)([^=\s]+)(?:(\s*=\s*)("[^"]*"?|'[^']*'?|\S*)?)?/g,
+    attribs.replace(/^(\s+)([^=\s]+)(?:(\s*=\s*)("[^"]*"?|'[^']*'?|\S*)?)?/gs,
         (_, lead, attrib, equals, value) => {
       let quote: string;
 
+      equals = equals || '';
       value = value || '';
 
       if (value.startsWith('"')) {
@@ -894,7 +897,7 @@ export class HtmlParser {
   }
 
   private atEOF(): boolean {
-    return this.sourceIndex >= (this.htmlSource || '').length;
+    return !this.htmlSource;
   }
 
   private getChar(multi?: RegExp): string {
@@ -919,13 +922,13 @@ export class HtmlParser {
       return ch;
     }
 
-    if (this.sourceIndex >= this.htmlSource.length)
+    if (this.htmlSource.length === 0)
       return '';
     else if (multi) {
-      const $ = multi.exec(this.htmlSource.slice(this.sourceIndex));
+      const $ = multi.exec(this.htmlSource);
 
       if ($) {
-        this.sourceIndex += $[1].length;
+        this.htmlSource = this.htmlSource.slice($[1].length);
         this.parseResults.characters += $[1].length;
         this.column += this.columnIncrement + $[1].length - 1;
 
@@ -933,16 +936,18 @@ export class HtmlParser {
       }
     }
 
+    let skip = 1;
+
     ++this.parseResults.characters;
-    ch = this.htmlSource.charAt(this.sourceIndex++);
+    ch = this.htmlSource.charAt(0);
 
     if (!this.fast && ch === '\r') {
-      const ch2 = this.htmlSource.charAt(this.sourceIndex);
+      const ch2 = this.htmlSource.charAt(1);
 
       if (ch2 === '\n') {
         ++this.parseResults.characters;
-        ++this.sourceIndex;
         ch += '\n';
+        skip = 2;
       }
     }
 
@@ -962,15 +967,15 @@ export class HtmlParser {
 
         // Test for high surrogate
         if (0xD800 <= cp && cp <= 0xDBFF) {
-          const ch2 = this.htmlSource.charAt(this.sourceIndex);
+          const ch2 = this.htmlSource.charAt(1);
 
           if (ch2) {
             const cp2 = ch2.charCodeAt(0);
 
             // Test for low surrogate
             if (0xDC00 <= cp2 && cp2 <= 0xDFFF) {
-              ++this.sourceIndex;
               ch += ch2;
+              skip = 2;
             }
           }
         }
@@ -978,6 +983,7 @@ export class HtmlParser {
     }
 
     this.pendingSource += ch;
+    this.htmlSource = this.htmlSource.slice(skip);
 
     return ch;
   }

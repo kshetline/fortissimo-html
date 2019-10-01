@@ -9,7 +9,7 @@ let speedFast: number;
 
 function first(done: () => void) {
   const bench = benchmark((html: string, callback: any) => {
-    const parser = new HtmlParser({ fast: true, eol: false });
+    const parser = new HtmlParser({ fast: true });
 
     parser
       .on('completion', () => callback())
