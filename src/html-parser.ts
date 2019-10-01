@@ -269,7 +269,7 @@ export class HtmlParser {
     this.startParsing(source);
     this.yieldTime = 0;
 
-    if (!this.stopped)
+    if (this.parseResults)
       this.parseLoop();
 
     return this.parseResults;
@@ -279,8 +279,8 @@ export class HtmlParser {
     this.startParsing(source);
     this.yieldTime = yieldTime;
 
-    if (this.stopped)
-      return null;
+    if (!this.parserRunning)
+      return undefined;
 
     return new Promise<ParseResults>(resolve => {
       const parse = () => {
@@ -289,7 +289,7 @@ export class HtmlParser {
         if (this.pendingReset) {
           this.reset();
           this.callback('completion', null);
-          resolve(null);
+          resolve(undefined);
         }
         else if (this.stopped) {
           this.callback('completion', this.parseResults);
@@ -321,7 +321,7 @@ export class HtmlParser {
       const bailout = this.callback('encoding', encoding, encoding.toLowerCase().replace('-', ''), false);
 
       if (bailout)
-        this.stop();
+        this.reset();
     }
   }
 

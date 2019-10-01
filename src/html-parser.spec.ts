@@ -96,16 +96,16 @@ describe('html-parser', () => {
     expect(completed).to.be.true;
   });
 
-  it('should properly reconstruct HTML from generic callbacks', () => {
+  it('should properly reconstruct HTML from generic callbacks using parseAsync()', async () => {
     const content = fs.readFileSync('./test/sample.html', 'utf-8');
     const parser = new HtmlParser();
     let rebuilt = '';
 
-    parser
+    await parser
       .on('generic', (depth, text) => {
         rebuilt += text;
       })
-      .parse(content);
+      .parseAsync(content);
 
     expect(content).equals(rebuilt);
   });
@@ -142,19 +142,30 @@ describe('html-parser', () => {
     }
   });
 
-  it('can stop the parser', () => {
-    const parser = new HtmlParser();
+  it('can stop the parser', async () => {
+    let parser = new HtmlParser();
     let results: ParseResults;
 
     results = parser
       .on('generic', () => parser.stop())
       .parse(SMALL_SAMPLE);
+
     expect(results.stopped).to.be.true;
     expect(results.toString()).equals('<!DOCTYPE html>');
     expect(new ParseResults().toString()).equals('');
-  });
 
-  it('can reset the parser', () => {
+    parser = new HtmlParser();
+
+    results = await parser
+      .on('generic', () => parser.stop())
+      .parseAsync(SMALL_SAMPLE);
+
+    expect(results.stopped).to.be.true;
+    expect(results.toString()).equals('<!DOCTYPE html>');
+    expect(new ParseResults().toString()).equals('');
+   });
+
+  it('can reset the parser', async () => {
     const parser = new HtmlParser();
     let results: ParseResults;
 
@@ -163,8 +174,13 @@ describe('html-parser', () => {
       .parse(SMALL_SAMPLE);
     expect(results).to.be.undefined;
 
-    parser.stop();
-    expect(true).to.be.ok;
+    parser.off('generic');
+    results = await parser
+      .on('encoding', () => {
+        return true;
+      })
+      .parseAsync(SMALL_SAMPLE);
+    expect(results).to.be.undefined;
   });
 
   it('should allow </ as plain text', () => {
