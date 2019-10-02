@@ -142,7 +142,7 @@ function stylize(elem: DomElement, options?: HtmlStyleOptions): string {
 
       result.push(markup(elem.innerWhitespace, pf, null, ws, false));
 
-      if (badTerminator)
+      if (badTerminator !== null)
         result.push(markup(badTerminator, pf, 'error', false, false));
       else if (elem.closureState === ClosureState.SELF_CLOSED)
         result.push(markup('/>', pf, 'markup', false, false));

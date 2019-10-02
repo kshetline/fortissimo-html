@@ -395,7 +395,7 @@ export class DomNode extends DomElement {
         parts.push(this.innerWhitespace);
 
       if (this.badTerminator !== null)
-          parts.push(this.badTerminator);
+        parts.push(this.badTerminator);
       else if (this.closureState === ClosureState.SELF_CLOSED)
         parts.push('/>');
       else

@@ -558,8 +558,12 @@ export class HtmlParser {
     this.dom.push(node);
     this.callback('start-tag-start', this.dom.getDepth(), tag);
 
-    attribs.replace(/^(\s+)([^=\s]+)(?:(\s*=\s*)("[^"]*"?|'[^']*'?|\S*)?)?/gs,
-        (_, lead, attrib, equals, value) => {
+    const attribMatcher = /(\s+)([^=\s]+)(?:(\s*=\s*)("[^"]*"?|'[^']*'?|\S*)?)?/g;
+    let $: string[];
+
+    while (($ = attribMatcher.exec(attribs))) {
+      // noinspection JSUnusedLocalSymbols
+      let [_, lead, attrib, equals, value] = $;
       let quote: string;
 
       equals = equals || '';
@@ -577,9 +581,7 @@ export class HtmlParser {
       this.dom.addAttribute(attrib, value, lead, equals, quote);
       this.attribute = attrib;
       this.doAttributeCallback(equals, value, quote);
-
-      return '';
-    });
+    }
 
     this.handleAttributeStart('>', end);
   }
@@ -852,7 +854,7 @@ export class HtmlParser {
       this.dom.getCurrentNode().closureState = ClosureState.UNCLOSED;
     }
 
-    if (content || this.collectedSpace) {
+    if (this.collectedSpace || content) {
       content = this.collectedSpace + content;
       this.dom.addChild(new TextElement(content, this.textLine, this.textColumn, tag === 'textarea'));
 
@@ -862,10 +864,13 @@ export class HtmlParser {
       this.pendingSource = '';
     }
 
-    const $$ = new RegExp('^<\\/(' + tag + ')([ \\n\\r\\t\\f]*)>$', 'i').exec(endTag);
+    if (terminated) {
+      const $$ = new RegExp('^<\\/(' + tag + ')([ \\n\\r\\t\\f]*)>$', 'i').exec(endTag);
 
-    this.pop(tag, `</${$$[1]}${$$[2]}>`);
-    this.doEndTagCallback($$[1], $$[2] + '>');
+      this.pop(tag, `</${$$[1]}${$$[2]}>`);
+      this.doEndTagCallback($$[1], $$[2] + '>');
+    }
+
     this.state = State.OUTSIDE_MARKUP;
   }
 
@@ -880,8 +885,11 @@ export class HtmlParser {
     ++this.parseResults.errors;
     this.callback('error', message, this.line, this.column, reportPending ? this.pendingSource : '');
     this.state = State.OUTSIDE_MARKUP;
-    this.collectedSpace = '';
-    this.pendingSource = '';
+
+    if (reportPending) {
+      this.collectedSpace = '';
+      this.pendingSource = '';
+    }
   }
 
   private doEndTagCallback(tag: string, trailingContent: string) {

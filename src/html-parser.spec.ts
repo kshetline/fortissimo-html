@@ -33,6 +33,15 @@ describe('html-parser', () => {
     expect(errors).equals(results.errors);
   });
 
+  it('should properly reconstruct damaged HTML', () => {
+    const content = fs.readFileSync('./test/sample.html', 'utf-8').replace('<style>', '<style');
+    const parser = new HtmlParser();
+    const results = parser.parse(content).domRoot;
+
+    expect(content).equals(results.toString());
+  });
+
+
   it('should properly parse XHTML in fast mode', () => {
     const content = fs.readFileSync('./test/sample-w3c.html', 'utf-8');
     const parser = new HtmlParser({ fast: true, eol: false });
