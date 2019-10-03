@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { addListener, copyScriptAsIIFE } from './copy-script';
+import { addCopyListener, copyScriptAsIIFE } from './copy-script';
 
 let clipboardText: string;
 let throwCopyError = false;
@@ -50,7 +50,7 @@ const fakeDocument = {
             return {
               childNodes: [
                 {
-                  classList: new FakeClassList(['xxx-whitespace']),
+                  classList: new FakeClassList(['fh-whitespace']),
                   innerText: '·\t•↵'
                 },
                 {
@@ -63,7 +63,7 @@ const fakeDocument = {
                   nodeValue: 'bar'
                 },
                 {
-                  classList: new FakeClassList(['xxx-invalid']),
+                  classList: new FakeClassList(['fh-invalid']),
                   innerText: '���'
                 },
               ]
@@ -86,10 +86,10 @@ describe('copy-script', () => {
       saveDocument = (global as any).document;
 
     (global as any).document = fakeDocument;
-    addListener();
+    addCopyListener();
     expect(callback).to.not.be.ok;
     docElement = fakeElement;
-    addListener();
+    addCopyListener();
     expect(callback).to.be.ok;
     throwCopyError = true;
     callback(fakeCopyEvent);

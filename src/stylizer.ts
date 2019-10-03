@@ -1,4 +1,4 @@
-import { copyScriptAsIIFE } from './copy-script';
+import { getCopyScript } from './copy-script';
 import {
   ClosureState, CData, CommentElement, DeclarationElement, DocType, DomElement, DomNode, ProcessingElement,
   TextElement, UnmatchedClosingTag, OQ, CQ
@@ -27,7 +27,7 @@ const DEFAULT_OPTIONS = {
   includeCopyScript: true,
   outerTag: 'html',
   showWhitespace: false,
-  stylePrefix: 'fh',
+  stylePrefix: 'fh-',
   tabSize: 8,
   title: 'Stylized HTML'
 };
@@ -81,14 +81,13 @@ export function stylizeHtml(elem: DomElement, options?: HtmlStyleOptions): strin
 ${generateCss(options)}  </style>
 </head>
 ` : '') +
-`<${tag} class="${options.stylePrefix}-html">${stylize(elem, options)}${options.includeCopyScript ?
-    '<script>' + copyScriptAsIIFE.replace(/'(\.?)xxx-(html|invalid|whitespace)'/g,
-      "'$1" + options.stylePrefix + "-$2'") + '</script>'
+`<${tag} class="${options.stylePrefix}html">${stylize(elem, options)}${options.includeCopyScript ?
+    '<script>' + getCopyScript(options.stylePrefix) + '</script>'
 : ''}</${tag}>` + (fullDocument ? '</html>' : '');
 }
 
 function stylize(elem: DomElement, options?: HtmlStyleOptions): string {
-  const pf = options.stylePrefix + '-';
+  const pf = options.stylePrefix;
   const ws = options.showWhitespace;
 
   if (elem instanceof CommentElement)
@@ -184,7 +183,7 @@ function generateCss(options: HtmlStyleOptions) {
   const prefix = options.stylePrefix;
 
   let css =
-`  .${prefix}-html {
+`  .${prefix}html {
     background-color: ${options.colors.background};
     color: ${options.colors.foreground};
     font: ${options.font};
@@ -193,11 +192,11 @@ function generateCss(options: HtmlStyleOptions) {
     white-space: pre;
   }
 
-  .${prefix}-tab {
+  .${prefix}tab {
     color: ${options.colors.whitespace};
   }
 
-  .${prefix}-tab::before {
+  .${prefix}tab::before {
     content: "→";
     display: inline-block;
     overflow-x: visible;
@@ -210,7 +209,7 @@ function generateCss(options: HtmlStyleOptions) {
     const property = color.startsWith('bg_') ? 'background-color' : 'color';
     const value = (options.colors as any)[color];
 
-    css += `  .${prefix}-${color} { ${property}: ${value}; }\n`;
+    css += `  .${prefix}${color} { ${property}: ${value}; }\n`;
   });
 
   return css;

@@ -18,9 +18,13 @@ ${restoreWhitespaceStrict.toString()}
 
 ${restoreWhitespace.toString()}
 
-(${addListener.toString()})();
+(${addCopyListener.toString()})();
 })();
 `.replace(/cov_\w+\.\w(\[\d+\])+\+\+[;,]/g, ''); // Remove code-coverage changes that might get embedded in the code.
+
+export function getCopyScript(prefix = 'fh-'): string {
+  return copyScriptAsIIFE.replace("'fh-'", "'" + prefix + "'");
+}
 
 function restoreWhitespaceStrict(s: string) {
   return s.replace(/[^ \n\r\t\f\xA0]/g, function(ch) { return ch === '·' ? ' ' : ch === '•' ? '\xA0' : ''; });
@@ -31,8 +35,10 @@ function restoreWhitespace(s: string) {
     return wsReplacements[ws] || ''; });
 }
 
-export function addListener() {
-  var doc = document.querySelector('.xxx-html') as HTMLElement;
+export function addCopyListener(prefix?: string) {
+  prefix = prefix || 'fh-';
+
+  var doc = document.querySelector('.' + prefix + 'html') as HTMLElement;
 
   if (!doc)
     return;
@@ -47,11 +53,12 @@ export function addListener() {
         var nodes = selection.getRangeAt(0).cloneContents().childNodes as NodeList;
         var parts = [];
 
-        // nodes isn't a "real" array - no forEach!
+        /* nodes isn't a "real" array - no forEach! */
         for (var i = 0; i < nodes.length; ++i) {
           var node = nodes[i] as any;
 
-          if (node.classList && (node.classList.contains('xxx-invalid') || node.classList.contains('xxx-whitespace')))
+          if (node.classList && (node.classList.contains(prefix + 'invalid') ||
+              node.classList.contains(prefix + 'whitespace')))
             parts.push(restoreWhitespaceStrict(node.innerText));
           else if (node.localName === 'span')
             parts.push(node.innerText);
