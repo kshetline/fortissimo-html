@@ -2,8 +2,8 @@ import { ClosureState, DomElement, DomNode, TextElement } from './dom';
 import { columnWidth, EntityStyle, EscapeOptions, escapeToEntities, reencodeEntities, ReencodeOptions, TargetEncoding } from './characters';
 
 export enum ValueQuoting {
-  ALWAYS_QUOTE,
   LEAVE_AS_IS,
+  ALWAYS_QUOTE,
   UNQUOTE_INTEGERS,
   UNQUOTE_SIMPLE_VALUES
 }
@@ -79,9 +79,10 @@ const DEFAULT_OPTIONS: InternalOptions = {
     undoUnneededEntities: false
   },
   indent: 4,
+  // TODO: Added 'text' below for SVG. Might other SVG elements belong here?
   inline: new Set(['a', 'abbr', 'acronym', 'b', 'basefont', 'bdo', 'big', 'br', 'cite', 'cite', 'code', 'dfn',
                    'em', 'font', 'i', 'img', 'input', 'kbd', 'label', 'q', 's', 'samp', 'select', 'small', 'span',
-                   'strike', 'strong', 'sub', 'sup', 'tt', 'u', 'var']),
+                   'strike', 'strong', 'sub', 'sup', 'text', 'tt', 'u', 'var']),
   instantiateSyntheticNodes: false,
   keepWhitespaceInside: new Set(['/', 'pre', 'span', 'textarea']),
   lastText: null,
@@ -97,6 +98,10 @@ const DEFAULT_OPTIONS: InternalOptions = {
   valueQuoteStyle: ValueQuoteStyle.PREFER_DOUBLE,
 };
 
+function compactWhitespace(s: string): string {
+  return s.replace(/[ \t\n\f\r]+/g, ' ');
+}
+
 export function formatHtml(node: DomNode, options?: HtmlFormatOptions): void {
   const opts = processOptions(options || {});
 
@@ -110,7 +115,7 @@ export function formatHtml(node: DomNode, options?: HtmlFormatOptions): void {
   if (!opts.eol)
     opts.eol = '\n';
 
-  if (opts.trimDocument && node.children && node.children.length > 0) {
+  if (opts.indent > 0 && (opts.indent === 1 || opts.trimDocument) && node.children && node.children.length > 0) {
     if (node.children[0] instanceof TextElement)
       node.children[0].content = (node.children[0].content || '').replace(/^\s+/, '');
 
@@ -120,7 +125,7 @@ export function formatHtml(node: DomNode, options?: HtmlFormatOptions): void {
       node.children[last].content = (node.children[last].content || '').replace(/\s+$/, '');
   }
 
-  if (opts.endDocumentWithNewline) {
+  if (opts.indent > 0 && opts.endDocumentWithNewline) {
     if (!node.children)
       node.children = [];
 
@@ -154,23 +159,30 @@ function formatNode(node: DomNode, options: InternalOptions, indent: number): vo
     if (elem instanceof DomNode) {
       formatAttributes(elem, indent + delta, options);
 
-      if (/[\r\n][ \t\f]*>/.test(elem.endTagText || '')) {
-        const $ = /(.*)[\r\n][ \t\f]*>/s.exec(elem.endTagText);
+      if (options.indent > 0) {
+        if (options.indent === 1)
+          elem.endTagText = compactWhitespace(elem.endTagText || '').replace(/\s+>$/, '>');
+        if (/[\r\n][ \t\f]*>/.test(elem.endTagText || '')) {
+          const $ = /(.*)[\r\n][ \t\f]*>/s.exec(elem.endTagText);
 
-        elem.endTagText = $[1] + options.eol + tabify(' '.repeat((indent + delta) * options.indent), options) + '>';
-        pre_indented = i;
-      }
-
-      if (options.lastText && options.removeNewLineBefore.has(elem.tagLc))
-        options.lastText.content = options.lastText.content.replace(/\s+$/, '');
-      else if ((options.newLineBefore.has(elem.tagLc) || !node.contentInline) && pre_indented !== i - 1) {
-        if (!options.lastText) {
-          options.lastText = new TextElement('', 0, 0, false);
-          children.splice(i++, 0, options.lastText);
+          elem.endTagText = $[1] + options.eol + tabify(' '.repeat((indent + delta) * options.indent), options) + '>';
+          pre_indented = i;
         }
 
-        applyIndentation(options.lastText, indent + delta, options);
+        if (options.lastText && options.removeNewLineBefore.has(elem.tagLc))
+          options.lastText.content = options.lastText.content.replace(/\s+$/, '');
+        else if ((options.newLineBefore.has(elem.tagLc) || !node.contentInline) && pre_indented !== i - 1) {
+          if (!options.lastText) {
+            options.lastText = new TextElement('', 0, 0, false);
+            children.splice(i++, 0, options.lastText);
+          }
+
+          applyIndentation(options.lastText, indent + delta, options, node.contentInline);
+        }
       }
+
+      if (options.indent === 1)
+        elem.innerWhitespace = '';
 
       const saveLastText = options.lastText;
 
@@ -192,29 +204,38 @@ function formatNode(node: DomNode, options: InternalOptions, indent: number): vo
         else
           elem.content = escapeToEntities(elem.content, options.escapeOptions);
       }
+
+      if (options.indent === 1 && !keepWhitespaceInside && !specialText)
+        elem.content = compactWhitespace(elem.content);
     }
     else {
-      if (options.lastText && /[\r\n]/.test(options.lastText.content))
-        applyIndentation(options.lastText, indent + delta, options);
+      if (options.indent > 0 && options.lastText && (options.indent === 1 || /[\r\n]/.test(options.lastText.content)))
+        applyIndentation(options.lastText, indent + delta, options, node.contentInline);
 
       options.lastText = null;
     }
   }
 
-  if (specialText || !node.contentInline && !keepWhitespaceInside) {
-    if (!options.lastText) {
-      options.lastText = new TextElement('', 0, 0, false);
-      children.push(options.lastText);
+  if (options.indent > 0 && (specialText || !node.contentInline && !keepWhitespaceInside)) {
+    if (options.indent === 1) {
+      if (options.lastText && !specialText)
+        options.lastText.content = options.lastText.content && compactWhitespace(options.lastText.content);
     }
+    else {
+      if (!options.lastText) {
+        options.lastText = new TextElement('', 0, 0, false);
+        children.push(options.lastText);
+      }
 
-    if (node.closureState === ClosureState.EXPLICITLY_CLOSED) {
-      const indentation = tabify(' '.repeat(indent * options.indent), options);
-      const $ = /^(.*(?:\r\n|\n|\r))[ \t\f]*$/s.exec(options.lastText.content);
+      if (node.closureState === ClosureState.EXPLICITLY_CLOSED) {
+        const indentation = tabify(' '.repeat(indent * options.indent), options);
+        const $ = /^(.*(?:\r\n|\n|\r))[ \t\f]*$/s.exec(options.lastText.content);
 
-      options.lastText.content = ($ && $[1] || options.lastText.content + options.eol) + indentation;
+        options.lastText.content = ($ && $[1] || options.lastText.content + options.eol) + indentation;
+      }
+      else
+        options.lastText.content = options.lastText.content.replace(/(?:\r\n|\n|\r)[ \t\f]*$/, '');
     }
-    else
-      options.lastText.content = options.lastText.content.replace(/(?:\r\n|\n|\r)[ \t\f]*$/, '');
   }
 
   if (node.closureState === ClosureState.EXPLICITLY_CLOSED)
@@ -223,11 +244,15 @@ function formatNode(node: DomNode, options: InternalOptions, indent: number): vo
     options.lastText = null; // null signifies that any saved lastText should be restored.
 }
 
-function applyIndentation(elem: DomElement, indent: number, options: InternalOptions): void {
-  const indentation = tabify(' '.repeat(indent * options.indent), options);
-  const $ = /(.*(?:\r\n|\n|\r))[ \t\f]*/s.exec(elem.content);
+function applyIndentation(elem: DomElement, indent: number, options: InternalOptions, inline: boolean): void {
+  if (options.indent > 1) {
+    const indentation = tabify(' '.repeat(indent * options.indent), options);
+    const $ = /(.*(?:\r\n|\n|\r))[ \t\f]*/s.exec(elem.content);
 
-  elem.content = ($ && $[1] || elem.content + options.eol) + indentation;
+    elem.content = ($ && $[1] || elem.content + options.eol) + indentation;
+  }
+  else
+    elem.content = compactWhitespace(inline ? elem.content : elem.content.trim());
 }
 
 function formatAttributes(node: DomNode, indent: number, options: InternalOptions): void {
@@ -257,7 +282,7 @@ function formatAttributes(node: DomNode, indent: number, options: InternalOption
 
     let spacing = node.spacing[i];
 
-    if (options.normalizeAttributeSpacing) {
+    if (options.indent > 1 && options.normalizeAttributeSpacing) {
       if (/[\r\n]/.test(spacing)) {
         const extraIndent = options.alignAttributes ? columnWidth(node.tag) + 2
           : options.continuationIndent;
@@ -272,6 +297,8 @@ function formatAttributes(node: DomNode, indent: number, options: InternalOption
       if (node.equals[i])
         node.equals[i] = options.spaceAroundAttributeEquals ? ' = ' : '=';
     }
+    else if (options.indent === 1)
+      node.spacing[i] = ' ';
   }
 }
 
@@ -326,7 +353,7 @@ function findInlineContent(node: DomNode, options: InternalOptions): void {
   for (const child of children) {
     if (child instanceof DomNode) {
       findInlineContent(child, options);
-      node.contentInline = node.contentInline && child.contentInline && options.inline.has(child.tagLc) &&
+      node.contentInline = node.contentInline && options.inline.has(child.tagLc) &&
         !options.newLineBefore.has(child.tagLc);
     }
     else if (!options.eol && child instanceof TextElement) {
@@ -336,6 +363,15 @@ function findInlineContent(node: DomNode, options: InternalOptions): void {
         options.eol = '\r';
       else if (child.content.includes('\n'))
         options.eol = '\n';
+    }
+  }
+
+  const scriptOrStyle = (node.tagLc === 'script' || node.tagLc === 'style');
+
+  if (options.indent > 0 && !node.contentInline && !scriptOrStyle && !options.inline.has(node.tagLc)) {
+    for (const child of children) {
+      if (child instanceof TextElement)
+        child.content = child.content.trim();
     }
   }
 }

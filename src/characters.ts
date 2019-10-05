@@ -208,13 +208,13 @@ export function reencodeEntities(s: string, options: EscapeOptions, forAttribute
   const sb: string[] = [];
 
   separateEntities(s).forEach((value, index) => {
-    if (index % 2 === 0 || (forAttributeValue && !value.endsWith(';')) || !isValidEntity(value))
+    if (index % 2 === 0 || (forAttributeValue && !value.endsWith(';')))
       sb.push(escapeToEntities(value, options));
     else {
       if (!value.endsWith(';'))
         value += ';';
 
-      if (options.reencode !== RO.REPAIR_ONLY) {
+      if (options.reencode !== RO.REPAIR_ONLY || isValidEntity(value)) {
         const chars = resolveEntity(value);
 
         if (options.undoUnneededEntities && !/&(amp|lt|gt|quot|apos);/.test(value) &&
