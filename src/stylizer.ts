@@ -234,7 +234,7 @@ function markup(s: string, prefix: string, qlass: string, markWhitespace: boolea
   else if (markWhitespace) {
     return s.split(/([ \n\r\f\xA0]+|\t)/).map((match, index) => {
       if (index % 2 === 1) {
-        match = match.replace(/\r\n|./gs, ch => whitespaces[ch]);
+        match = match.replace(/\r\n|\n|\r|./g, ch => whitespaces[ch]);
 
         return markup(match, prefix, match === '\t' ? 'tab' : 'whitespace', false, false, false);
       }

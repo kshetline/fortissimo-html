@@ -548,7 +548,7 @@ export class HtmlParser {
 
     let $0, tag, attribs;
     // noinspection JSUnusedAssignment
-    [$0, tag, attribs, this.collectedSpace] = /^(\S+)(.*?)(\s*)$/s.exec(fullTag);
+    [$0, tag, attribs, this.collectedSpace] = /^(\S+)((?:.|\s)*?)(\s*)$/.exec(fullTag);
     this.currentTag = tag;
     this.currentTagLc = tag.toLowerCase();
     const node = new DomNode(this.currentTagLc, 0, 0);

@@ -37,7 +37,7 @@ describe('dom', () => {
 
     expect(results.querySelector('#inner-test').innerHTML).equals('innerHTML <em>test</em>');
     expect(results.querySelector('table').innerHTML.replace(/\s+/g, ' '))
-      .equals(' <caption>A Table <th>foo <tbody> <tr><td>4</td><td>5 <tr><td>6<td>7 ');
+      .equals(' <caption>A Table <th>foo <tbody> <tr><td> 4 </td><td>5 <tr><td>6<td>7 ');
   });
 
   it('should convert DOM to JSON useful for debugging', async () => {

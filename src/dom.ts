@@ -209,9 +209,9 @@ export class UnmatchedClosingTag extends DomElement {
 export class DomNode extends DomElement {
   attributes: string[] = [];
   badTerminator: string = null;
+  blockContext = false; // Used by formatter.ts
   children: DomElement[];
   closureState = ClosureState.UNCLOSED;
-  contentInline = false; // Used by formatter.ts
   endTagLine = 0;
   endTagColumn = 0;
   endTagText = '';

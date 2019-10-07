@@ -59,6 +59,23 @@ export function isEol(ch: string): boolean {
   return ch === '\n' || ch === '\r' || ch === '\r\n';
 }
 
+// The following trim functions differ from the standard string functions in that they only operate on HTML whitespace
+export function trim(s: string) {
+  return (s || '').replace(/(?:^[ \t\n\f\r]+)|(?:[ \t\n\f\r]+$)/g, '');
+}
+
+export function trimLeft(s: string) {
+  return (s || '').replace(/^[ \t\n\f\r]+/, '');
+}
+
+export function trimRight(s: string) {
+  return (s || '').replace(/[ \t\n\f\r]+$/, '');
+}
+
+export function compactWhitespace(s: string): string {
+  return s.replace(/[ \t\n\f\r]+/g, ' ');
+}
+
 export function isInvalidCharacter(ch: string): boolean {
   return /[\x00-\x08\x0B\x0E-\x1F\x7F-\x9F]/.test(ch);
 }
@@ -211,10 +228,12 @@ export function reencodeEntities(s: string, options: EscapeOptions, forAttribute
     if (index % 2 === 0 || (forAttributeValue && !value.endsWith(';')))
       sb.push(escapeToEntities(value, options));
     else {
-      if (!value.endsWith(';'))
+      const valid = isValidEntity(value);
+
+      if (valid && !value.endsWith(';'))
         value += ';';
 
-      if (options.reencode !== RO.REPAIR_ONLY || isValidEntity(value)) {
+      if (options.reencode !== RO.REPAIR_ONLY && valid) {
         const chars = resolveEntity(value);
 
         if (options.undoUnneededEntities && !/&(amp|lt|gt|quot|apos);/.test(value) &&
