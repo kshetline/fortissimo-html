@@ -41,6 +41,10 @@
       margin: 1em;
       min-width: 500px;
     }
+
+    .cws b {
+      background-color: #FC0;
+    }
   </style>
   <script>
     function foo(value) {
@@ -95,7 +99,8 @@
   <br>
   <p>Foo
   <p>Bar</p>
-  <p>Α<i>Β<b>Γ</b>Δ</i>Ε</p>
+  <p>Α<i>Β<b>Γ<u>Δ</u>Ε</b>Ζ</i>Η</p>
+  <p class="cws">I'm <b> not </b> going to pay a lot for this muffler.</p>
   <!-- Misnested 1, https://www.w3.org/TR/2011/WD-html5-20110525/the-end.html#misnested-tags:-b-i-b-i -->
   <p>1<b>2<i class="foo">3</b>4</i>5</p>
   <!-- Misnested 2, https://www.w3.org/TR/2011/WD-html5-20110525/the-end.html#misnested-tags:-b-p-b-p -->

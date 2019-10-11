@@ -19,7 +19,7 @@ describe('formatter', () => {
 
   it('should format HTML', () => {
     formatHtml(dom, {
-      indent: 1,
+      indent: 2,
       childrenNotIndented: ['-thead', '-tbody', '-tfoot'],
       continuationIndent: 4,
       instantiateSyntheticNodes: true,
@@ -42,9 +42,9 @@ describe('formatter', () => {
     expect(reformatted).contains(' class=inner-wrapper ');
   });
 
-  it('should transform quotes to single quotes', async () => {
+  it('should transform quotes to single quotes', () => {
     parser.reset();
-    dom = (await parser.parse(SMALL_SAMPLE)).domRoot;
+    dom = parser.parse(SMALL_SAMPLE).domRoot;
     formatHtml(dom, {
       indent: 2,
       continuationIndent: 4,
@@ -58,9 +58,9 @@ describe('formatter', () => {
     expect(reformatted).contains(" alt='can&apos;t'/>");
   });
 
-  it('should unquote integers', async () => {
+  it('should unquote integers', () => {
     parser.reset();
-    dom = (await parser.parse(SMALL_SAMPLE)).domRoot;
+    dom = parser.parse(SMALL_SAMPLE).domRoot;
     formatHtml(dom, {
       indent: 2,
       continuationIndent: 4,
@@ -73,9 +73,21 @@ describe('formatter', () => {
     expect(reformatted).contains(' width=32 height=32 ');
   });
 
-  it('should unquote simple values and add spaces around =', async () => {
+  it('should handle indentation for mis-nested tags', () => {
     parser.reset();
-    dom = (await parser.parse(SMALL_SAMPLE)).domRoot;
+    dom = parser.parse('<b>1<p>2</b>3</p>').domRoot;
+    formatHtml(dom, {
+      indent: 2,
+      continuationIndent: 4
+    });
+
+    reformatted = dom.toString();
+    expect(reformatted).contains('<b>1\n  <p>2</b>3</p>');
+  });
+
+  it('should unquote simple values and add spaces around =', () => {
+    parser.reset();
+    dom = parser.parse(SMALL_SAMPLE).domRoot;
     formatHtml(dom, {
       indent: 2,
       continuationIndent: 4,

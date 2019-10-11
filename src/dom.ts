@@ -55,6 +55,7 @@ function stringToSelector(s: string): Selector {
 
 export abstract class DomElement {
   parent: DomNode;
+  blockContext = false; // Used by formatter.ts
 
   protected constructor(
     public content: string,
@@ -209,7 +210,6 @@ export class UnmatchedClosingTag extends DomElement {
 export class DomNode extends DomElement {
   attributes: string[] = [];
   badTerminator: string = null;
-  blockContext = false; // Used by formatter.ts
   children: DomElement[];
   closureState = ClosureState.UNCLOSED;
   endTagLine = 0;

@@ -1,4 +1,4 @@
-import { CData, ClosureState, DomElement, DomNode, TextElement, UnmatchedClosingTag } from './dom';
+import { CData, ClosureState, DomElement, DomNode, TextElement } from './dom';
 import {
   columnWidth, compactWhitespace, EntityStyle, EscapeOptions, escapeToEntities, reencodeEntities,
   ReencodeOptions, TargetEncoding, trimLeft, trimRight
@@ -118,15 +118,15 @@ export function formatHtml(node: DomNode, options?: HtmlFormatOptions): void {
 
   if (opts.indent > 0 && (opts.indent === 1 || opts.trimDocument) && node.children && node.children.length > 0) {
     if (node.children[0] instanceof TextElement)
-      node.children[0].content = (node.children[0].content || '').replace(/^\s+/, '');
+      node.children[0].content = trimLeft(node.children[0].content);
 
     const last = node.children.length - 1;
 
     if (node.children[last] instanceof TextElement)
-      node.children[last].content = (node.children[last].content || '').replace(/\s+$/, '');
+      node.children[last].content = trimRight(node.children[last].content);
   }
 
-  if (opts.indent > 0 && opts.endDocumentWithNewline) {
+  if (opts.indent > 1 && opts.endDocumentWithNewline) {
     if (!node.children)
       node.children = [];
 
@@ -149,7 +149,7 @@ function formatNode(node: DomNode, options: InternalOptions, indent: number): vo
     return;
 
   const delta = options.childrenNotIndented.has(node.tagLc) ? 0 : 1;
-  const keepWhitespaceInside = options.keepWhitespaceInside.has(node.tagLc);
+  const keepWhitespaceInside = options.keepWhitespaceInside.has(node.tagLc) || node.tagLc === '/';
   const specialText = (node.tagLc === 'script' || node.tagLc === 'style');
 
   let pre_indented = -2;
@@ -207,9 +207,6 @@ function formatNode(node: DomNode, options: InternalOptions, indent: number): vo
         else
           elem.content = escapeToEntities(elem.content, options.escapeOptions);
       }
-
-      if (options.indent === 1 && !keepWhitespaceInside && !specialText)
-        elem.content = compactWhitespace(elem.content);
     }
     else {
       if (options.indent > 0 && options.lastText && (options.indent === 1 || /[\r\n]/.test(options.lastText.content)))
@@ -225,7 +222,7 @@ function formatNode(node: DomNode, options: InternalOptions, indent: number): vo
       children.push(options.lastText);
     }
 
-    if (node.closureState === ClosureState.EXPLICITLY_CLOSED) {
+    if (node.closureState === ClosureState.EXPLICITLY_CLOSED && !options.inline.has(node.tagLc)) {
       const indentation = tabify(' '.repeat(indent * options.indent), options);
       const $ = /^((?:.|\s)*(?:\r\n|\n|\r))[ \t\f]*$/.exec(options.lastText.content);
 
@@ -376,8 +373,10 @@ function preprocessWhitespace(node: DomNode, options: InternalOptions, blockStar
     else if (child instanceof TextElement) {
       child.content = compactWhitespace(child.content);
 
-      if (blockStart) {
+      if (blockStart ||
+          child.content.startsWith(' ') && options.lastText && options.lastText.content.endsWith(' ')) {
         child.content = trimLeft(child.content);
+        child.blockContext = true;
         blockStart = false;
       }
 
@@ -405,7 +404,7 @@ function followedByBlock(parent: DomNode, childIndex: number, options: InternalO
 
     if (sibling instanceof DomNode)
       return !options.inline.has(sibling.tagLc);
-    else if (sibling instanceof TextElement || sibling instanceof UnmatchedClosingTag || sibling instanceof CData)
+    else if (sibling instanceof TextElement || sibling instanceof CData)
       return false;
   }
 
