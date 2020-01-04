@@ -1,20 +1,7 @@
-let performanceCopy: any;
-let processCopy: any;
-
-try {
-  performanceCopy = performance;
-}
-catch (err) {}
-
-try {
-  processCopy = process && process.hrtime;
-}
-catch (err) {}
-
 export function processMillis(): number {
-  if (performanceCopy)
-    return performanceCopy.now();
-  else if (processCopy) {
+  if (typeof performance !== 'undefined')
+    return performance.now();
+  else if (typeof process !== 'undefined') {
     if ((process.hrtime as any).bigint)
       return Number((process.hrtime as any).bigint()) / 1000000;
     else {
