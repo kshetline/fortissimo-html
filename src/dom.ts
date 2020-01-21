@@ -24,6 +24,11 @@ export function CQ(quote: string): string {
   return quote.length < 2 ? quote : '';
 }
 
+export function isCommentLike(obj: any) {
+  return (obj instanceof CommentElement || obj instanceof DeclarationElement || obj instanceof ProcessingElement) &&
+         !(obj instanceof DocType);
+}
+
 interface Selector {
   element: string;
   id: string;

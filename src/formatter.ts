@@ -1,4 +1,4 @@
-import { CData, ClosureState, DomElement, DomNode, TextElement } from './dom';
+import { CData, ClosureState, DomElement, DomNode, isCommentLike, TextElement } from './dom';
 import {
   columnWidth, compactWhitespace, EntityStyle, EscapeOptions, escapeToEntities, reencodeEntities,
   ReencodeOptions, TargetEncoding, trimLeft, trimRight
@@ -103,6 +103,9 @@ const DEFAULT_OPTIONS: InternalOptions = {
 export function formatHtml(node: DomNode, options?: HtmlFormatOptions): void {
   const opts = processOptions(options || {});
 
+  if (!opts.eol)
+    opts.eol = '\n';
+
   if (opts.instantiateSyntheticNodes)
     instantiateSyntheticNodes(node);
   else
@@ -112,9 +115,6 @@ export function formatHtml(node: DomNode, options?: HtmlFormatOptions): void {
     opts.lastText = null;
     preprocessWhitespace(node, opts);
   }
-
-  if (!opts.eol)
-    opts.eol = '\n';
 
   if (opts.indent > 0 && (opts.indent === 1 || opts.trimDocument) && node.children && node.children.length > 0) {
     if (node.children[0] instanceof TextElement)
@@ -180,7 +180,7 @@ function formatNode(node: DomNode, options: InternalOptions, indent: number): vo
             children.splice(i++, 0, options.lastText);
           }
 
-          applyIndentation(options.lastText, indent + delta, options);
+          applyIndentation(options.lastText, indent + delta, true, options);
         }
       }
 
@@ -210,13 +210,13 @@ function formatNode(node: DomNode, options: InternalOptions, indent: number): vo
     }
     else {
       if (options.indent > 0 && options.lastText && (options.indent === 1 || /[\r\n]/.test(options.lastText.content)))
-        applyIndentation(options.lastText, indent + delta, options);
+        applyIndentation(options.lastText, indent + delta, false, options);
 
       options.lastText = null;
     }
   }
 
-  if (options.indent > 1 && (specialText || !keepWhitespaceInside) && !onlyContainsInline(node)) {
+  if (options.indent > 1 && (specialText || (!keepWhitespaceInside && !onlyContainsInline(node)))) {
     if (!options.lastText) {
       options.lastText = new TextElement('', 0, 0, false);
       children.push(options.lastText);
@@ -250,12 +250,12 @@ function onlyContainsInline(node: DomNode): boolean {
   return onlyInline;
 }
 
-function applyIndentation(elem: DomElement, indent: number, options: InternalOptions): void {
+function applyIndentation(elem: DomElement, indent: number, addNewLine: boolean, options: InternalOptions): void {
   if (options.indent > 1) {
     const indentation = tabify(' '.repeat(indent * options.indent), options);
-    const $ = /((?:.|\s)*(?:\r\n|\n|\r))[ \t\f]*/.exec(elem.content);
+    const $ = /((?:.|\s)*(?:\r\n|\n|\r))[ \t\f]*$/.exec(elem.content);
 
-    elem.content = ($ && $[1] || elem.content + options.eol) + indentation;
+    elem.content = ($ && $[1] || elem.content + (addNewLine ? options.eol : '')) + indentation;
   }
 }
 
@@ -371,17 +371,25 @@ function preprocessWhitespace(node: DomNode, options: InternalOptions, blockStar
       blockStart = child.blockContext;
     }
     else if (child instanceof TextElement) {
-      child.content = compactWhitespace(child.content);
+      const afterComment = isCommentLike(children[i - 1]);
+      const beforeComment = isCommentLike(children[i + 1]);
 
-      if (blockStart ||
-          child.content.startsWith(' ') && options.lastText && options.lastText.content.endsWith(' ')) {
-        child.content = trimLeft(child.content);
-        child.blockContext = true;
-        blockStart = false;
+      if (afterComment || beforeComment)
+        child.content = child.content.replace(/[ \f\t]+/g, ' ').replace(/[\n\r]+/g, options.eol)
+          .replace(/^ (?=[\n\r])/, '');
+      else {
+        child.content = compactWhitespace(child.content).replace(/(^|[\r\n])[ \f\t]*([\r\n])/g, '$1$2');
+
+        if (blockStart ||
+            child.content.startsWith(' ') && options.lastText && options.lastText.content.endsWith(' ')) {
+          child.content = trimLeft(child.content);
+          child.blockContext = true;
+          blockStart = false;
+        }
+
+        if (blockEnd || followedByBlock(node, i, options))
+          child.content = trimRight(child.content);
       }
-
-      if (blockEnd || followedByBlock(node, i, options))
-        child.content = trimRight(child.content);
 
       if (child.content.startsWith(' ') && options.lastText)
         options.lastText.content = trimRight(options.lastText.content);
@@ -459,10 +467,29 @@ function applyTagList(originalSet: Set<string>, mods: string[]) {
 }
 
 function tabify(s: string, options: InternalOptions): string {
-  if (options.useTabCharacters)
-    s = s.replace(/(^|[\r\n]+)( +)/g, (match, $1, $2) => {
-      return $1 + '\t'.repeat(Math.floor($2.length / options.tabSize)) + ' '.repeat($2.length % options.tabSize);
-    });
+  if (options.useTabCharacters && s.length >= options.tabSize) {
+    s = s.split(/([\r\n])/).map(ss =>
+      ss.replace(/^( +)/, (match, $1) => {
+        return '\t'.repeat(Math.floor($1.length / options.tabSize)) + ' '.repeat($1.length % options.tabSize);
+      })
+    ).join('');
+  }
+
+  return s;
+}
+
+function detabify(s: string, options: InternalOptions): string {
+  if (options.useTabCharacters && s.includes('\t')) {
+    const tabSize = options.tabSize;
+    s = s.split(/([\r\n])/).map(ss => {
+      let adj = 0;
+      ss.replace(/\t/g, (match, offset) => {
+        const len = (offset + adj) % tabSize | tabSize;
+        adj += len - 1;
+        return ' '.repeat(len);
+      });
+    }).join('');
+  }
 
   return s;
 }
