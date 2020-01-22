@@ -18,7 +18,7 @@ let callback: (event: any) => void;
 
 // noinspection JSUnusedGlobalSymbols
 const fakeElement = {
-  addEventListener: function(eventType: string, aCallback: (event: any) => void) {
+  addEventListener: function (eventType: string, aCallback: (event: any) => void) {
     callback = aCallback;
   }
 };

@@ -1,7 +1,6 @@
 /* This file is meant to be stringified and used as ES5-compatible JavaScript. */
 
-// tslint:disable prefer-const
-// tslint:disable no-var-keyword
+/* eslint-disable no-var */
 const wsReplacements: Record<string, string> = {
   '·': ' ',
   '↵\n': '\n',
@@ -27,12 +26,13 @@ export function getCopyScript(prefix = 'fh-'): string {
 }
 
 function restoreWhitespaceStrict(s: string) {
-  return s.replace(/[^ \n\r\t\f\xA0]/g, function(ch) { return ch === '·' ? ' ' : ch === '•' ? '\xA0' : ''; });
+  return s.replace(/[^ \n\r\t\f\xA0]/g, function (ch) { return ch === '·' ? ' ' : ch === '•' ? '\xA0' : ''; });
 }
 
 function restoreWhitespace(s: string) {
-  return s.replace(/·|↵\n|↧\f|␍\r|␍↵\r\n|•|↵|↧|␍|�/g, function(ws) {
-    return wsReplacements[ws] || ''; });
+  return s.replace(/·|↵\n|↧\f|␍\r|␍↵\r\n|•|↵|↧|␍|�/g, function (ws) {
+    return wsReplacements[ws] || '';
+  });
 }
 
 export function addCopyListener(prefix?: string) {
@@ -43,7 +43,7 @@ export function addCopyListener(prefix?: string) {
   if (!doc)
     return;
 
-  doc.addEventListener('copy', function(event) {
+  doc.addEventListener('copy', function (event) {
     var selection = document.getSelection();
     var newSelection;
     var copied = false;

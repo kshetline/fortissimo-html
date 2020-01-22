@@ -27,13 +27,18 @@ describe('characters', () => {
     expect(encoded).contains('&lt;=&gt;');
     expect(unescapeEntities(encoded)).equals(testStr);
 
-    encoded = escapeToEntities(testStr, { reencode: ReencodeOptions.NAMED_ENTITIES, entityStyle: EntityStyle.SHORTEST,
-      target: TargetEncoding.EIGHT_BIT });
+    encoded = escapeToEntities(testStr, {
+      reencode: ReencodeOptions.NAMED_ENTITIES,
+      entityStyle: EntityStyle.SHORTEST,
+      target: TargetEncoding.EIGHT_BIT
+    });
     expect(encoded).contains('&#271;');
     expect(testStr).equals(unescapeEntities(encoded));
 
-    encoded = escapeToEntities(testStr, { reencode: ReencodeOptions.NAMED_ENTITIES,
-      entityStyle: EntityStyle.NAMED_OR_DECIMAL });
+    encoded = escapeToEntities(testStr, {
+      reencode: ReencodeOptions.NAMED_ENTITIES,
+      entityStyle: EntityStyle.NAMED_OR_DECIMAL
+    });
     expect(encoded).contains('&copy;');
     expect(testStr).equals(unescapeEntities(encoded));
   });
@@ -41,12 +46,14 @@ describe('characters', () => {
   it('should encode entities for 7- and 8-bit targets', () => {
     let encoded: string;
 
-    encoded = escapeToEntities(testStr, {target: TargetEncoding.SEVEN_BIT});
+    encoded = escapeToEntities(testStr, { target: TargetEncoding.SEVEN_BIT });
     expect(encoded).contains('&nbsp;');
     expect(unescapeEntities(encoded)).equals(testStr);
 
-    encoded = escapeToEntities(testStr, {target: TargetEncoding.SEVEN_BIT,
-      entityStyle: EntityStyle.DECIMAL});
+    encoded = escapeToEntities(testStr, {
+      target: TargetEncoding.SEVEN_BIT,
+      entityStyle: EntityStyle.DECIMAL
+    });
     expect(encoded).contains('&#160;');
     expect(unescapeEntities(encoded)).equals(testStr);
 

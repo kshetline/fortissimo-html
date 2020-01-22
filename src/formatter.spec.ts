@@ -29,10 +29,10 @@ describe('formatter', () => {
       valueQuoting: ValueQuoting.UNQUOTE_SIMPLE_VALUES
     });
 
-    try {fs.mkdirSync('./test-output'); } catch (err) {}
+    try { fs.mkdirSync('./test-output'); } catch (err) {}
     fs.writeFileSync('./test-output/sample-reformatted.html', dom.toString(), { encoding: 'utf8' });
     fs.writeFileSync('./test-output/sample-reformatted-styled.html', stylizeHtml(dom,
-      { showWhitespace: true, title: 'Reformatted HTML'}), { encoding: 'utf8' });
+      { showWhitespace: true, title: 'Reformatted HTML' }), { encoding: 'utf8' });
 
     reformatted = dom.toString();
 

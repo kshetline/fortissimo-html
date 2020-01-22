@@ -82,8 +82,8 @@ ${generateCss(options)}  </style>
 </head>
 ` : '') +
 `<${tag} class="${options.stylePrefix}html">${stylize(elem, options)}${options.includeCopyScript ?
-    '<script>' + getCopyScript(options.stylePrefix) + '</script>'
-: ''}</${tag}>` + (fullDocument ? '</html>' : '');
+  '<script>' + getCopyScript(options.stylePrefix) + '</script>'
+  : ''}</${tag}>` + (fullDocument ? '</html>' : '');
 }
 
 function stylize(elem: DomElement, options?: HtmlStyleOptions): string {

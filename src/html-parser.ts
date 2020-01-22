@@ -1,3 +1,5 @@
+/* eslint-disable standard/no-callback-literal */
+/* eslint-disable no-case-declarations */
 import { processMillis } from './platform-specifics';
 import { VOID_ELEMENTS } from './elements';
 import { isAttributeNameChar, isEol, isMarkupStart, isPCENChar, isWhitespace } from './characters';
@@ -50,14 +52,14 @@ export enum State {
 
 const RE_WHITESPACE = /^([ \f]+)/;
 const RE_TEXT = /^([^<\t\n\r\uD800-\uDFFF]+)/;
-const RE_ATTRIB_NAME = /^([^=>\/\s\uD800-\uDFFF]+)/;
+const RE_ATTRIB_NAME = /^([^=>/\s\uD800-\uDFFF]+)/;
 const RE_COMMENT = /^([^->\t\n\r\uD800-\uDFFF]+)/;
 const RE_DECLARATION = /^([^>\t\n\r\uD800-\uDFFF]+)/;
 
 const RE_ATTRIB_VALUE: Record<string, RegExp> = {
   '"': /^([^"\t\n\r\uD800-\uDFFF]+)/,
   "'": /^([^'\t\n\r\uD800-\uDFFF]+)/,
-  '': /^([^=>\/\s\uD800-\uDFFF]+)/,
+  '': /^([^=>/\s\uD800-\uDFFF]+)/,
 };
 
 const RE_WHITESPACE_FAST = /^([ \t\n\f\r]+)/;
@@ -156,8 +158,7 @@ export class HtmlParser {
   }
 
   on(event: 'attribute', callback: AttributeCallback): HtmlParser;
-  on(event: 'cdata' | 'comment' | 'declaration' | 'generic' | 'processing' | 'start-tag-start',
-     callback: BasicCallback): HtmlParser;
+  on(event: 'cdata' | 'comment' | 'declaration' | 'generic' | 'processing' | 'start-tag-start', callback: BasicCallback): HtmlParser;
   on(event: 'completion', callback: CompletionCallback): HtmlParser;
   on(event: 'doctype', callback: DocTypeCallback): HtmlParser;
   on(event: 'encoding', callback: EncodingCallback): HtmlParser;
@@ -337,18 +338,18 @@ export class HtmlParser {
         ch = this.gatherWhitespace(ch);
       }
 
-     if (!ch && this.state < State.AT_COMMENT_START)
-       break;
+      if (!ch && this.state < State.AT_COMMENT_START)
+        break;
 
-     switch (this.state) {
+      switch (this.state) {
         case State.OUTSIDE_MARKUP:
           this.putBack(ch);
           this.handleText(this.collectedSpace + this.gatherText());
-        break;
+          break;
 
         case State.AT_MARKUP_START:
           this.handleMarkupStart(ch);
-        break;
+          break;
 
         case State.AT_START_TAG_START:
           if (this.fast)
@@ -357,7 +358,7 @@ export class HtmlParser {
             this.gatherTagName(ch);
             this.handleStartTagStart();
           }
-        break;
+          break;
 
         case State.AT_END_TAG_START:
           if (ch === '>') {
@@ -370,17 +371,17 @@ export class HtmlParser {
           }
 
           this.state = State.IN_END_TAG;
-        break;
+          break;
 
         case State.IN_END_TAG:
-         const invalidEnding = this.handleEndTag(ch);
+          const invalidEnding = this.handleEndTag(ch);
 
-         if (invalidEnding) {
-           this.gatherInvalidEndTagEnding();
-           this.pop(this.currentTagLc, `</${this.currentTag}${this.pendingSource}`);
-           this.doEndTagCallback(this.currentTag, this.pendingSource);
-         }
-        break;
+          if (invalidEnding) {
+            this.gatherInvalidEndTagEnding();
+            this.pop(this.currentTagLc, `</${this.currentTag}${this.pendingSource}`);
+            this.doEndTagCallback(this.currentTag, this.pendingSource);
+          }
+          break;
 
         case State.AT_ATTRIBUTE_START:
           let end = '>';
@@ -399,11 +400,11 @@ export class HtmlParser {
 
           if (getAttribName)
             this.gatherAttributeName(ch);
-        break;
+          break;
 
         case State.AT_ATTRIBUTE_ASSIGNMENT:
           this.handleAttributeAssignment(ch);
-        break;
+          break;
 
         case State.AT_ATTRIBUTE_VALUE:
           const quote = this.handleAttributeValueStepOne(ch);
@@ -417,7 +418,7 @@ export class HtmlParser {
           }
 
           this.state = State.AT_ATTRIBUTE_START;
-        break;
+          break;
 
         case State.AT_DECLARATION_START:
           if (this.handleDeclarationStartStepOne(ch)) {
@@ -426,17 +427,17 @@ export class HtmlParser {
 
             this.handleDeclarationStartStepTwo(content, terminated, isCData);
           }
-        break;
+          break;
 
         case State.AT_PROCESSING_START:
           [content, terminated] = this.gatherDeclarationOrProcessing(this.collectedSpace + ch);
           this.handleProcessingStart(content, terminated);
-        break;
+          break;
 
         case State.AT_COMMENT_START:
           [content, terminated] = this.gatherComment(this.collectedSpace + ch);
           this.handleCommentStart(content, terminated);
-        break;
+          break;
 
         case State.IN_STYLE_ELEMENT:
         case State.IN_SCRIPT_ELEMENT:
@@ -450,7 +451,7 @@ export class HtmlParser {
 
           [content, endTag, terminated] = this.gatherUntilEndTag(tag, ch);
           this.handleTextBlockElements(tag, content, endTag, terminated);
-        break;
+          break;
       }
 
       if (this.yieldTime && processMillis() >= loopStartTime + this.yieldTime)
@@ -525,13 +526,13 @@ export class HtmlParser {
     switch (ch) {
       case '/':
         this.state = State.AT_END_TAG_START;
-      break;
+        break;
 
       case '!':
       case '?':
         this.state = (ch === '!' ? State.AT_DECLARATION_START : State.AT_PROCESSING_START);
         this.collectedSpace = '';
-      break;
+        break;
 
       default:
         this.state = State.AT_START_TAG_START;
@@ -546,9 +547,8 @@ export class HtmlParser {
     if (end)
       fullTag = fullTag.substr(0, fullTag.length - end.length);
 
-    let $0, tag, attribs;
-    // noinspection JSUnusedAssignment
-    [$0, tag, attribs, this.collectedSpace] = /^(\S+)((?:.|\s)*?)(\s*)$/.exec(fullTag);
+    let tag, attribs;
+    [tag, attribs, this.collectedSpace] = /^(\S+)((?:.|\s)*?)(\s*)$/.exec(fullTag).slice(1);
     this.currentTag = tag;
     this.currentTagLc = tag.toLowerCase();
     const node = new DomNode(this.currentTagLc, 0, 0);
@@ -562,8 +562,7 @@ export class HtmlParser {
     let $: string[];
 
     while (($ = attribMatcher.exec(attribs))) {
-      // noinspection JSUnusedLocalSymbols
-      let [_, lead, attrib, equals, value] = $;
+      let [lead, attrib, equals, value] = $.slice(1);
       let quote: string;
 
       equals = equals || '';
@@ -734,7 +733,7 @@ export class HtmlParser {
         this.charset = this.pendingCharset;
       }
       else if (attribLc === 'content') {
-        const charset = (/\bcharset[ \n\r\t\f]*=[ \n\r\t\f]*([\w\-]+)\b/i.exec(value) || [])[1];
+        const charset = (/\bcharset[ \n\r\t\f]*=[ \n\r\t\f]*([\w-]+)\b/i.exec(value) || [])[1];
 
         if (this.contentType)
           this.charset = charset;
@@ -773,7 +772,6 @@ export class HtmlParser {
 
     return true;
   }
-
 
   private handleDeclarationStartStepTwo(content: string, terminated: boolean, isCData: boolean): void {
     if (isCData) {
@@ -1087,6 +1085,7 @@ export class HtmlParser {
     let afterSlash = false;
 
     while ((ch = this.getChar(this.reAttribValue[quote])) &&
+    // eslint-disable-next-line no-unmodified-loop-condition
            ch !== quote && (quote || (!isWhitespace(ch) && ch !== '>'))) {
       value += ch;
       afterSlash = ch === '/';
@@ -1146,7 +1145,7 @@ export class HtmlParser {
         return [cdataDetected ? content.substring(7, content.length - 2) : content, true, cdataDetected];
 
       content += ch;
-   }
+    }
 
     return [cdataDetected ? content.substr(7) : content, false, cdataDetected];
   }

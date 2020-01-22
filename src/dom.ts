@@ -62,7 +62,7 @@ export abstract class DomElement {
   parent: DomNode;
   blockContext = false; // Used by formatter.ts
 
-  protected constructor(
+  constructor(
     public content: string,
     public readonly line: number,
     public readonly column: number,
@@ -103,44 +103,18 @@ export abstract class DomElement {
 }
 
 export class CData extends DomElement {
-  constructor(
-    content: string,
-    line: number,
-    column: number,
-    terminated: boolean
-  ) {
-    super(content, line, column, terminated);
-  }
-
   toString(): string {
     return '<![CDATA[' + this.content + (this.terminated ? ']]>' : '');
   }
 }
 
 export class CommentElement extends DomElement {
-  constructor(content: string,
-    line: number,
-    column: number,
-    terminated: boolean
-  ) {
-    super(content, line, column, terminated);
-  }
-
   toString(): string {
     return '<!--' + this.content + (this.terminated ? '-->' : '');
   }
 }
 
 export class DeclarationElement extends DomElement {
-  constructor(
-    content: string,
-    line: number,
-    column: number,
-    terminated: boolean
-  ) {
-    super(content, line, column, terminated);
-  }
-
   toString(): string {
     return '<!' + this.content + (this.terminated ? '>' : '');
   }
@@ -169,15 +143,6 @@ export class DocType extends DeclarationElement {
 }
 
 export class ProcessingElement extends DomElement {
-  constructor(
-    content: string,
-    line: number,
-    column: number,
-    terminated: boolean
-  ) {
-    super(content, line, column, terminated);
-  }
-
   toString(): string {
     return '<?' + this.content + (this.terminated ? '>' : '');
   }

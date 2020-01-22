@@ -1,3 +1,4 @@
+/* eslint-disable prefer-const */
 import { expect } from 'chai';
 import fs from 'fs';
 import iconv from 'iconv-lite';
@@ -40,7 +41,6 @@ describe('html-parser', () => {
 
     expect(content).equals(results.toString());
   });
-
 
   it('should properly parse XHTML in fast mode', () => {
     const content = fs.readFileSync('./test/sample-w3c.html', 'utf-8');
@@ -172,7 +172,7 @@ describe('html-parser', () => {
     expect(results.stopped).to.be.true;
     expect(results.toString()).equals('<!DOCTYPE html>');
     expect(new ParseResults().toString()).equals('');
-   });
+  });
 
   it('can reset the parser', async () => {
     const parser = new HtmlParser();
@@ -185,9 +185,7 @@ describe('html-parser', () => {
 
     parser.off('generic');
     results = await parser
-      .on('encoding', () => {
-        return true;
-      })
+      .on('encoding', () => true)
       .parseAsync(SMALL_SAMPLE);
     expect(results).to.be.undefined;
   });
@@ -215,7 +213,7 @@ describe('html-parser', () => {
       '<span foo', '<span  foo =', '<span foo= "bar', '<', '</', '</a', '</a ', '</a b'
     ];
 
-    for (const ending of endings)  {
+    for (const ending of endings) {
       const content = SMALL_SAMPLE + ending;
       const parser = new HtmlParser();
       let rebuilt = '';

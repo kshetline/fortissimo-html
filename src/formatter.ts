@@ -400,6 +400,8 @@ function preprocessWhitespace(node: DomNode, options: InternalOptions, blockStar
       blockStart = false;
       options.lastText = null;
     }
+    //    else if (blockStart || isBlock || followedByBlock(node, i, options))
+    //      blockStart = child.blockContext = true;
   }
 
   if (isBlock)
@@ -469,15 +471,16 @@ function applyTagList(originalSet: Set<string>, mods: string[]) {
 function tabify(s: string, options: InternalOptions): string {
   if (options.useTabCharacters && s.length >= options.tabSize) {
     s = s.split(/([\r\n])/).map(ss =>
-      ss.replace(/^( +)/, (match, $1) => {
-        return '\t'.repeat(Math.floor($1.length / options.tabSize)) + ' '.repeat($1.length % options.tabSize);
-      })
+      ss.replace(/^( +)/, (match, $1) =>
+        '\t'.repeat(Math.floor($1.length / options.tabSize)) + ' '.repeat($1.length % options.tabSize)
+      )
     ).join('');
   }
 
   return s;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function detabify(s: string, options: InternalOptions): string {
   if (options.useTabCharacters && s.includes('\t')) {
     const tabSize = options.tabSize;
