@@ -32,7 +32,8 @@ function restoreWhitespaceStrict(s: string) {
 
 function restoreWhitespace(s: string) {
   return s.replace(/·|↵\n|↧\f|␍\r|␍↵\r\n|•|↵|↧|␍|�/g, function(ws) {
-    return wsReplacements[ws] || ''; });
+    return wsReplacements[ws] || '';
+  });
 }
 
 export function addCopyListener(prefix?: string) {

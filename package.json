@@ -5,10 +5,11 @@
   "main": "dist/src/index.js",
   "scripts": {
     "watch": "tsc -w",
-    "test": "nyc mocha --require ts-node/register src/**/*.spec.ts",
+    "test": "nyc mocha --require ts-node/register src/**/*.spec.ts && echo \"Restore HTML reporting!\"",
     "test-dev": "mocha --require ts-node/register -w --watch-extensions ts src/**/*.spec.ts",
     "test-debug": "nyc mocha --timeout 1800000 --require ts-node/register src/**/*.spec.ts",
-    "speed": "ts-node-dev test/speed-test.ts"
+    "speed": "ts-node-dev test/speed-test.ts",
+    "lint": "tslint --project ."
   },
   "nyc": {
     "extension": [
@@ -25,7 +26,6 @@
       "src/platform-specifics.ts"
     ],
     "reporter": [
-      "html",
       "text-summary"
     ],
     "require": [
@@ -60,7 +60,7 @@
   "dependencies": {
     "commander": "^3.0.2",
     "fast-glob": "^3.1.1",
-    "iconv-lite": "^0.5.0",
+    "iconv-lite": "^0.5.1",
     "tslint": "^5.20.1"
   },
   "devDependencies": {
@@ -76,7 +76,8 @@
     "nyc": "^14.1.1",
     "source-map-support": "^0.5.16",
     "ts-node-dev": "^1.0.0-pre.44",
+    "tslint-eslint-rules": "^5.4.0",
     "tslint-no-unused-expression-chai": "^0.1.4",
-    "typescript": "^3.7.4"
+    "typescript": "^3.7.5"
   }
 }

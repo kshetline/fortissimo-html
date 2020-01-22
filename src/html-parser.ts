@@ -50,14 +50,14 @@ export enum State {
 
 const RE_WHITESPACE = /^([ \f]+)/;
 const RE_TEXT = /^([^<\t\n\r\uD800-\uDFFF]+)/;
-const RE_ATTRIB_NAME = /^([^=>\/\s\uD800-\uDFFF]+)/;
+const RE_ATTRIB_NAME = /^([^=/>\s\uD800-\uDFFF]+)/;
 const RE_COMMENT = /^([^->\t\n\r\uD800-\uDFFF]+)/;
 const RE_DECLARATION = /^([^>\t\n\r\uD800-\uDFFF]+)/;
 
 const RE_ATTRIB_VALUE: Record<string, RegExp> = {
   '"': /^([^"\t\n\r\uD800-\uDFFF]+)/,
   "'": /^([^'\t\n\r\uD800-\uDFFF]+)/,
-  '': /^([^=>\/\s\uD800-\uDFFF]+)/,
+  '': /^([^=/>\s\uD800-\uDFFF]+)/,
 };
 
 const RE_WHITESPACE_FAST = /^([ \t\n\f\r]+)/;
@@ -546,9 +546,8 @@ export class HtmlParser {
     if (end)
       fullTag = fullTag.substr(0, fullTag.length - end.length);
 
-    let $0, tag, attribs;
-    // noinspection JSUnusedAssignment
-    [$0, tag, attribs, this.collectedSpace] = /^(\S+)((?:.|\s)*?)(\s*)$/.exec(fullTag);
+    let tag, attribs;
+    [tag, attribs, this.collectedSpace] = /^(\S+)((?:.|\s)*?)(\s*)$/.exec(fullTag).slice(1);
     this.currentTag = tag;
     this.currentTagLc = tag.toLowerCase();
     const node = new DomNode(this.currentTagLc, 0, 0);
@@ -562,8 +561,7 @@ export class HtmlParser {
     let $: string[];
 
     while (($ = attribMatcher.exec(attribs))) {
-      // noinspection JSUnusedLocalSymbols
-      let [_, lead, attrib, equals, value] = $;
+      let [lead, attrib, equals, value] = $.slice(1);
       let quote: string;
 
       equals = equals || '';

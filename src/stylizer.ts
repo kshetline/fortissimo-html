@@ -133,7 +133,7 @@ function stylize(elem: DomElement, options?: HtmlStyleOptions): string {
         const quote = elem.quotes[index];
         const value = OQ(quote) + elem.values[index] + CQ(quote);
 
-        if (!quote && /["'<=>`]/.test(value))
+        if (!quote && /["'=<>`]/.test(value))
           result.push(markup(value, pf, 'warning', false, false));
         else
           result.push(markup(value, pf, 'value', ws, true));

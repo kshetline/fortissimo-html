@@ -1,11 +1,11 @@
 import * as entitiesAsJson from './entities.json';
 
 export enum EntityStyle { DECIMAL, HEX, NUMERIC_SHORTEST, NAMED_OR_DECIMAL, NAMED_OR_HEX,
-  NAMED_OR_SHORTEST, SHORTEST}
+                          NAMED_OR_SHORTEST, SHORTEST }
 const ES = EntityStyle;
 
 export enum ReencodeOptions { DONT_CHANGE, REPAIR_ONLY, LOOSE_MINIMAL, MINIMAL,
-  NAMED_ENTITIES }
+                              NAMED_ENTITIES }
 const RO = ReencodeOptions;
 
 export enum TargetEncoding { SEVEN_BIT, EIGHT_BIT, UNICODE }
@@ -88,7 +88,7 @@ export function replaceIsolatedSurrogates(s: string): string {
 // This combines two tests, whether a character is a valid first character of a standard HTML element
 // or custom HTML element, or if it's anything else that starts markup (/ ! ?) when it follows <.
 export function isMarkupStart(ch: string) {
-  return ch !== undefined && /[a-z:\/!?]/i.test(ch);
+  return ch !== undefined && /[a-z:/!?]/i.test(ch);
 }
 
 const PCENCharRanges = new RegExp(
@@ -126,12 +126,12 @@ export function isAllPCENChar(s: string, loose = false): boolean {
 
 export function isAttributeNameChar(ch: string, loose = false): boolean {
   if (loose)
-    return /[^ \n\r\t\f>=\/]/.test(ch);
+    return /[^ \n\r\t\f>/=]/.test(ch);
   else
-    return ch > ' ' && !/["`>\/=]/.test(ch) && (ch < '0x7F' || ch >= '0xA0');
+    return ch > ' ' && !/["`>/=]/.test(ch) && (ch < '0x7F' || ch >= '0xA0');
 }
 
-const basicEntities: Record<string, string> = {'<': '&lt;', '>': '&gt;', '&': '&amp;'};
+const basicEntities: Record<string, string> = { '<': '&lt;', '>': '&gt;', '&': '&amp;' };
 
 export function minimalEscape(s: string): string {
   return s.replace(/[<>&]/g, match => basicEntities[match]);
@@ -186,10 +186,10 @@ export function escapeToEntities(s: string, options?: EscapeOptions): string {
 
     if (entityNeeded && (!named || style >= ES.NAMED_OR_SHORTEST)) {
       if (style === ES.DECIMAL || style === ES.NAMED_OR_DECIMAL ||
-          (style  === ES.NUMERIC_SHORTEST || (!named && style === ES.NAMED_OR_SHORTEST) || style === ES.SHORTEST) && cp <= 9999)
+          (style === ES.NUMERIC_SHORTEST || (!named && style === ES.NAMED_OR_SHORTEST) || style === ES.SHORTEST) && cp <= 9999)
         numeric = '&#' + cp + ';';
       else if (style === ES.HEX || style === ES.NAMED_OR_HEX ||
-          (style  === ES.NUMERIC_SHORTEST || (!named && style === ES.NAMED_OR_SHORTEST) || style === ES.SHORTEST) && cp > 9999)
+          (style === ES.NUMERIC_SHORTEST || (!named && style === ES.NAMED_OR_SHORTEST) || style === ES.SHORTEST) && cp > 9999)
         numeric = '&#x' + cp.toString(16).toUpperCase() + ';';
     }
 

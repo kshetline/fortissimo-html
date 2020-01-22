@@ -1,6 +1,16 @@
 {
+  "extends": [
+    "tslint-eslint-rules"
+  ],
   "rules": {
     "arrow-return-shorthand": true,
+    "brace-style": [
+      true,
+      "stroustrup",
+      {
+        "allowSingleLine": true
+      }
+    ],
     "callable-types": true,
     "class-name": true,
     "comment-format": [
@@ -51,23 +61,26 @@
       "timeEnd",
       "trace"
     ],
+    "no-control-regex": false,
     "no-construct": true,
     "no-debugger": false,
     "no-duplicate-super": true,
     "no-empty": false,
     "no-empty-interface": true,
     "no-eval": true,
+    "no-extra-boolean-cast": true,
     "no-inferrable-types": [
       true,
       "ignore-params"
     ],
     "no-misused-new": true,
     "no-non-null-assertion": true,
+    "no-regex-spaces": true,
     "no-shadowed-variable": true,
     "no-string-literal": false,
     "no-string-throw": true,
     "no-switch-case-fall-through": true,
-    "no-trailing-whitespace": [true, "ignore-blank-lines"],
+    "no-trailing-whitespace": true,
     "no-unnecessary-initializer": true,
     "no-unused-expression-chai": true,
     "no-use-before-declare": false,
@@ -89,6 +102,14 @@
       true,
       "always"
     ],
+    "sort-imports": [
+      "error",
+      {
+        "ignoreCase": true,
+        "ignoreMemberSort": false,
+        "memberSyntaxOrder": false
+      }
+    ],
     "triple-equals": [
       true,
       "allow-null-check"
@@ -104,6 +125,7 @@
       }
     ],
     "unified-signatures": true,
+    "use-isnan": true,
     "variable-name": false,
     "whitespace": [
       true,
