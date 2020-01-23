@@ -82,7 +82,7 @@ export function isInvalidCharacter(ch: string): boolean {
 
 export function replaceIsolatedSurrogates(s: string): string {
   return s && s.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|[^\uD800-\uDBFF][\uDC00-\uDFFF]/g,
-    ch => ch.length === 1 ? '\x02' : ch.charAt(0) + '\x03');
+      ch => ch.length === 1 ? '\x02' : ch.charAt(0) + '\x03');
 }
 
 // This combines two tests, whether a character is a valid first character of a standard HTML element
@@ -99,7 +99,7 @@ const PCENCharRanges = new RegExp(
 // PCEN: Potential Custom Element Name
 export function isPCENChar(ch: string, loose = false) {
   if (loose)
-    return /[^ \n\r\t\f/>]/.test(ch);
+    return /[^ \n\r\t\f\/>]/.test(ch);
   else if (ch <= 'z')
     return /[-._0-9a-z]/i.test(ch);
   else if (ch.length === 1)
@@ -107,7 +107,7 @@ export function isPCENChar(ch: string, loose = false) {
 
   const cp = ch.codePointAt(0);
 
-  return (0x10000 <= cp && cp <= 0xEFFFF);
+  return 0x10000 <= cp && cp <= 0xEFFFF;
 }
 
 export function isAllPCENChar(s: string, loose = false): boolean {
@@ -126,7 +126,7 @@ export function isAllPCENChar(s: string, loose = false): boolean {
 
 export function isAttributeNameChar(ch: string, loose = false): boolean {
   if (loose)
-    return /[^ \n\r\t\f>=/]/.test(ch);
+    return /[^ \n\r\t\f>/=]/.test(ch);
   else
     return ch > ' ' && !/["`>/=]/.test(ch) && (ch < '0x7F' || ch >= '0xA0');
 }
@@ -159,7 +159,7 @@ export function escapeToEntities(s: string, options?: EscapeOptions): string {
     const nextCh = s.charAt(i + 1) || '';
     const entityNeeded = (
       cp < 32 && !isWhitespace(ch) ||
-      (0x7F <= cp && cp <= 0x9F) ||
+      0x7F <= cp && cp <= 0x9F ||
       cp > highest ||
       options.reencode >= RO.MINIMAL && /[<>&]/.test(ch) ||
       options.reencode === RO.LOOSE_MINIMAL && (ch === '<' && (!nextCh || isMarkupStart(nextCh)) ||
@@ -320,7 +320,6 @@ export function resolveEntity(entity: string): string {
 
 export function columnWidth(s: string): number {
   return s ? s.length -
-    // eslint-disable-next-line no-misleading-character-class
     (s.match(/[\u0300-\u036F\u1AB0-\u1AFF\u1DC0-\u1DFF\u20D0-\u20FF\uFE20-\uFE2F]|[\uD800-\uDBFF][\uDC00-\uDFFF]/g)
       || []).length : 0;
 }

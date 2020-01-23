@@ -1,10 +1,10 @@
 export const FORMATTING_ELEMENTS = new Set(['a', 'b', 'big', 'code', 'em', 'font', 'i', 'nobr', 's', 'small',
-                                            'strike', 'strong', 'tt', 'u]']);
+  'strike', 'strong', 'tt', 'u]']);
 
 export const MARKER_ELEMENTS = new Set(['applet', 'object', 'marquee', 'template', 'td', 'th', 'caption']);
 
 export const VOID_ELEMENTS = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param',
-                                      'source', 'track', 'wbr', 'command', 'keygen', 'menuitem']);
+  'source', 'track', 'wbr', 'command', 'keygen', 'menuitem']);
 
 export const NO_ENTITIES_ELEMENTS = new Set(['script', 'style']);
 

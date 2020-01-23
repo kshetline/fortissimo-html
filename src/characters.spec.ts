@@ -1,9 +1,9 @@
+import { expect } from 'chai';
 import {
   columnWidth, EntityStyle, escapeToEntities, isAllPCENChar, isAttributeNameChar, isInvalidCharacter, isMarkupStart,
   isOtherWhitespace, isPCENChar, ReencodeOptions, replaceIsolatedSurrogates, TargetEncoding,
   unescapeEntities
 } from './characters';
-import { expect } from 'chai';
 
 describe('characters', () => {
   let testStr = 'foo & bar < </ <a > &0';
@@ -27,18 +27,13 @@ describe('characters', () => {
     expect(encoded).contains('&lt;=&gt;');
     expect(unescapeEntities(encoded)).equals(testStr);
 
-    encoded = escapeToEntities(testStr, {
-      reencode: ReencodeOptions.NAMED_ENTITIES,
-      entityStyle: EntityStyle.SHORTEST,
-      target: TargetEncoding.EIGHT_BIT
-    });
+    encoded = escapeToEntities(testStr, { reencode: ReencodeOptions.NAMED_ENTITIES, entityStyle: EntityStyle.SHORTEST,
+      target: TargetEncoding.EIGHT_BIT });
     expect(encoded).contains('&#271;');
     expect(testStr).equals(unescapeEntities(encoded));
 
-    encoded = escapeToEntities(testStr, {
-      reencode: ReencodeOptions.NAMED_ENTITIES,
-      entityStyle: EntityStyle.NAMED_OR_DECIMAL
-    });
+    encoded = escapeToEntities(testStr, { reencode: ReencodeOptions.NAMED_ENTITIES,
+      entityStyle: EntityStyle.NAMED_OR_DECIMAL });
     expect(encoded).contains('&copy;');
     expect(testStr).equals(unescapeEntities(encoded));
   });
@@ -50,10 +45,8 @@ describe('characters', () => {
     expect(encoded).contains('&nbsp;');
     expect(unescapeEntities(encoded)).equals(testStr);
 
-    encoded = escapeToEntities(testStr, {
-      target: TargetEncoding.SEVEN_BIT,
-      entityStyle: EntityStyle.DECIMAL
-    });
+    encoded = escapeToEntities(testStr, { target: TargetEncoding.SEVEN_BIT,
+      entityStyle: EntityStyle.DECIMAL });
     expect(encoded).contains('&#160;');
     expect(unescapeEntities(encoded)).equals(testStr);
 
@@ -117,7 +110,7 @@ describe('characters', () => {
 
   it('should recognize valid attribute name characters', () => {
     'abc_.-Дウ月'.split('').forEach(ch => expect(isAttributeNameChar(ch)).to.be.true);
-    '>=/ `"'.split('').forEach(ch => expect(isAttributeNameChar(ch)).to.be.false);
+    '>/= `"'.split('').forEach(ch => expect(isAttributeNameChar(ch)).to.be.false);
     'abc_.-Дウ月`"'.split('').forEach(ch => expect(isAttributeNameChar(ch, true)).to.be.true);
   });
 
