@@ -64,9 +64,9 @@ export abstract class DomElement {
 
   constructor(
     public content: string,
-    public readonly line: number,
-    public readonly column: number,
-    public readonly terminated: boolean
+    readonly line: number,
+    readonly column: number,
+    readonly terminated: boolean
   ) {}
 
   get depth(): number {
@@ -468,7 +468,7 @@ export class DomModel {
         else if (elem.tagLc === 'tr') {
           const hasTh = !!elem.querySelector('th');
 
-          if (!section || (hasTh && section.tagLc !== 'thead')) {
+          if (!section || (hasTh && section?.tagLc !== 'thead')) {
             section = new DomNode(hasTh ? 'thead' : 'tbody', 0, 0, false, true);
             section.parent = table;
             children[i] = section;
