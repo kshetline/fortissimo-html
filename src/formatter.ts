@@ -1,6 +1,6 @@
 import { CData, ClosureState, DomElement, DomNode, isCommentLike, TextElement } from './dom';
 import {
-  columnWidth, compactWhitespace, EntityStyle, EscapeOptions, escapeToEntities, reencodeEntities,
+  columnWidth, compactNewlines, compactWhitespace, EntityStyle, EscapeOptions, escapeToEntities, reencodeEntities,
   ReencodeOptions, TargetEncoding, trimLeft, trimRight
 } from './characters';
 
@@ -30,6 +30,7 @@ export interface HtmlFormatOptions extends EscapeOptions {
   inline?: string[];
   instantiateSyntheticNodes?: boolean;
   keepWhitespaceInside?: string[];
+  maxBlankLines?: number;
   newLineBefore?: string[];
   normalizeAttributeSpacing?: boolean;
   removeNewLineBefore?: string[];
@@ -56,6 +57,7 @@ interface InternalOptions {
   instantiateSyntheticNodes: boolean;
   keepWhitespaceInside: Set<string>;
   lastText: TextElement;
+  maxBlankLines: number;
   newLineBefore: Set<string>;
   normalizeAttributeSpacing: boolean;
   removeNewLineBefore: Set<string>;
@@ -88,6 +90,7 @@ const DEFAULT_OPTIONS: InternalOptions = {
   instantiateSyntheticNodes: false,
   keepWhitespaceInside: new Set(['pre', 'textarea']),
   lastText: null,
+  maxBlankLines: 1,
   newLineBefore: new Set(['body', 'div', 'form', 'h1', 'h2', 'h3', 'p']),
   normalizeAttributeSpacing: true,
   removeNewLineBefore: new Set(['br']),
@@ -163,6 +166,7 @@ function formatNode(node: DomNode, options: InternalOptions, indent: number): vo
       if (options.indent > 0) {
         if (options.indent === 1)
           elem.endTagText = compactWhitespace(elem.endTagText || '').replace(/\s+>$/, '>');
+
         if (/[\r\n][ \t\f]*>/.test(elem.endTagText || '')) {
           // Would prefer to simply use `.*` instead of `(?:.|\s)*`, but Firefox
           // doesn't support regex "dotall" `s` flag.
@@ -378,17 +382,22 @@ function preprocessWhitespace(node: DomNode, options: InternalOptions, blockStar
         child.content = child.content.replace(/[ \f\t]+/g, ' ').replace(/[\n\r]+/g, options.eol)
           .replace(/^ (?=[\n\r])/, '');
       else {
-        child.content = compactWhitespace(child.content).replace(/(^|[\r\n])[ \f\t]*([\r\n])/g, '$1$2');
+        const keepNewlines = options.maxBlankLines >= 0;
+
+        child.content = compactWhitespace(child.content, keepNewlines).replace(/(^|[\r\n])[ \f\t]+(?=[\r\n]|$)/g, '$1');
+
+        if (keepNewlines && options.maxBlankLines >= -1)
+          child.content = compactNewlines(child.content, options.maxBlankLines + 1);
 
         if (blockStart ||
             child.content.startsWith(' ') && options.lastText && options.lastText.content.endsWith(' ')) {
-          child.content = trimLeft(child.content);
+          child.content = trimLeft(child.content, keepNewlines);
           child.blockContext = true;
           blockStart = false;
         }
 
         if (blockEnd || followedByBlock(node, i, options))
-          child.content = trimRight(child.content);
+          child.content = trimRight(child.content, keepNewlines);
       }
 
       if (child.content.startsWith(' ') && options.lastText)
@@ -480,7 +489,7 @@ function tabify(s: string, options: InternalOptions): string {
   return s;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+// noinspection JSUnusedLocalSymbols
 function detabify(s: string, options: InternalOptions): string {
   if (options.useTabCharacters && s.includes('\t')) {
     const tabSize = options.tabSize;

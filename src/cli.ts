@@ -19,7 +19,7 @@ commander
     const files = fg.sync(globs, options);
 
     for (const file of files)
-      processFile(file);
+      await processFile(file);
   })
   .parse(process.argv);
 
@@ -30,7 +30,7 @@ async function processFile(file: string): Promise<void> {
 
   try {
     while (tries++ < 2 && !dom) {
-      const content = fs.readFileSync(file, readEncoding);
+      const content = fs.readFileSync(file, { encoding: readEncoding as BufferEncoding });
       const parser = new HtmlParser();
 
       dom = parser

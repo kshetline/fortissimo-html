@@ -60,20 +60,41 @@ export function isEol(ch: string): boolean {
 }
 
 // The following trim functions differ from the standard string functions in that they only operate on HTML whitespace
-export function trim(s: string) {
-  return (s || '').replace(/(?:^[ \t\n\f\r]+)|(?:[ \t\n\f\r]+$)/g, '');
+export function trim(s: string, skipNewlines = false) {
+  if (skipNewlines)
+    return (s || '').replace(/(?:^[ \t\f]+)|(?:[ \t\f]+$)/g, '');
+  else
+    return (s || '').replace(/(?:^[ \t\n\f\r]+)|(?:[ \t\n\f\r]+$)/g, '');
 }
 
-export function trimLeft(s: string) {
-  return (s || '').replace(/^[ \t\n\f\r]+/, '');
+export function trimLeft(s: string, skipNewlines = false) {
+  if (skipNewlines)
+    return (s || '').replace(/^[ \t\f]+/, '');
+  else
+    return (s || '').replace(/^[ \t\n\f\r]+/, '');
 }
 
-export function trimRight(s: string) {
-  return (s || '').replace(/[ \t\n\f\r]+$/, '');
+export function trimRight(s: string, skipNewlines = false) {
+  if (skipNewlines)
+    return (s || '').replace(/[ \t\f]+$/, '');
+  else
+    return (s || '').replace(/[ \t\n\f\r]+$/, '');
 }
 
-export function compactWhitespace(s: string): string {
-  return s.replace(/[ \t\n\f\r]+/g, ' ');
+export function compactWhitespace(s: string, skipNewlines = false): string {
+  if (skipNewlines)
+    return (s || '').replace(/[ \t\f]+/g, ' ');
+  else
+    return (s || '').replace(/[ \t\n\f\r]+/g, ' ');
+}
+
+export function compactNewlines(s: string, maxInARow = 1): string {
+  s = s || '';
+
+  const replacement = s.includes('\r\n') ? '\r\n' : (s.includes('\r') ? '\r' : '\n').repeat(maxInARow);
+  const regex = new RegExp(`(\r\n|\r|\n){${maxInARow + 1},}`, 'g');
+
+  return s.replace(regex, replacement);
 }
 
 export function isInvalidCharacter(ch: string): boolean {

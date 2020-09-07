@@ -100,4 +100,18 @@ describe('formatter', () => {
     expect(reformatted).contains('charset = utf-8');
     expect(reformatted).contains(' width = 32 height = 32 ');
   });
+
+  it('should keep some, but not all, original blank lines', () => {
+    parser.reset();
+    dom = parser.parse('<span>A</span> \n \n   \n \n <span>B</span>').domRoot;
+    formatHtml(dom, {
+      endDocumentWithNewline: false,
+      indent: 2,
+      maxBlankLines: 1
+    });
+
+    reformatted = dom.toString();
+
+    expect(reformatted).equals('<span>A</span>\n\n<span>B</span>');
+  });
 });
