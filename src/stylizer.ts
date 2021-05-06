@@ -73,7 +73,7 @@ export function stylizeHtml(elem: DomElement, options?: HtmlStyleOptions): strin
   const tag = fullDocument ? 'body' : options.outerTag;
 
   return (fullDocument ? `<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8"/>
   <title>${options.title}</title>
