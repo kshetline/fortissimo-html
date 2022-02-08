@@ -1,5 +1,6 @@
 import { FORMATTING_ELEMENTS, MARKER_ELEMENTS, OPEN_IMPLIES_CLOSE } from './elements';
 import { unescapeEntities } from './characters';
+import { isString } from '@tubular/util';
 
 function last<T>(array: T[]): T {
   if (array && array.length > 0)
@@ -16,10 +17,12 @@ export enum ClosureState {
   IMPLICITLY_CLOSED
 }
 
+// Opening quotation mark
 export function OQ(quote: string): string {
   return quote.length < 2 ? quote : quote.substr(1);
 }
 
+// Closing quotation mark
 export function CQ(quote: string): string {
   return quote.length < 2 ? quote : '';
 }
@@ -194,10 +197,19 @@ export class DomNode extends DomElement {
   values: string[] = [];
   valuesLookup: Record<string, string> = {};
 
+  static createNode(tag: string): DomNode {
+    const node = new DomNode(tag);
+
+    node.setEndTag(`</${tag}>`);
+    node.closureState = ClosureState.EXPLICITLY_CLOSED;
+
+    return node;
+  }
+
   constructor(
     public tag: string,
-    line: number,
-    column: number,
+    line = 0,
+    column = 0,
     caseSensitive = false,
     synthetic = false
   ) {
@@ -208,7 +220,82 @@ export class DomNode extends DomElement {
       this.synthetic = true;
   }
 
-  addAttribute(name: string, value: string, leadingSpace = '', equals = '=', quote = '"'): void {
+  get attributeCount(): number {
+    return this.attributes.length;
+  }
+
+  getAttribute(nameOrIndex: number | string): string[] {
+    if (isString(nameOrIndex))
+      nameOrIndex = this.attributes.indexOf(nameOrIndex);
+
+    return [this.attributes[nameOrIndex], this.values[nameOrIndex]];
+  }
+
+  deleteAttribute(nameOrIndex: number | string): boolean {
+    if (isString(nameOrIndex))
+      nameOrIndex = this.attributes.indexOf(nameOrIndex);
+
+    if (this.attributes[nameOrIndex] === undefined)
+      return false;
+
+    delete this.valuesLookup[this.attributes[nameOrIndex]];
+    this.attributes.splice(nameOrIndex, 1);
+    this.values.splice(nameOrIndex, 1);
+    this.equals.splice(nameOrIndex, 1);
+    this.quotes.splice(nameOrIndex, 1);
+    this.spacing.splice(nameOrIndex, 1);
+
+    return true;
+  }
+
+  clearAttributes(): void {
+    this.valuesLookup = {};
+    this.attributes = [];
+    this.values = [];
+    this.equals = [];
+    this.quotes = [];
+    this.spacing = [];
+  }
+
+  // TODO: Needs more work about how raw attribute values vs. actual values will be handled.
+
+  setAttribute(name: string, value = '', leadingSpace?: string, equals?: string, quote?: string): void {
+    const index = this.attributes.indexOf(name);
+
+    if (index < 0)
+      this.addAttribute(name, value, leadingSpace, equals, quote);
+    else if (value === null)
+      this.deleteAttribute(index);
+    else {
+      this.values[index] = value;
+      this.spacing[index] = leadingSpace ?? this.spacing[index];
+      this.equals[index] = equals ?? this.equals[index];
+      this.quotes[index] = quote ?? this.quotes[index];
+      this.valuesLookup[name] = value;
+
+      if (value) {
+        if (!this.equals[index])
+          this.equals[index] = '=';
+
+        if (!this.quotes[index])
+          this.quotes[index] = '"';
+      }
+    }
+  }
+
+  addAttribute(name: string, value = '', leadingSpace = ' ', equals?: string, quote?: string): void {
+    if (value === null)
+      return;
+
+    if (value === '') {
+      equals = equals ?? '';
+      quote = quote ?? '';
+    }
+    else {
+      equals = equals ?? '=';
+      quote = quote ?? '"';
+    }
+
     this.attributes.push(name);
     this.values.push(value);
     this.spacing.push(leadingSpace);

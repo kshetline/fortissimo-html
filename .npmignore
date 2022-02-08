@@ -10,3 +10,5 @@
 *.spec.js
 /.nyc_output
 /test-output
+.editorconfig
+.travis.yml

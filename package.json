@@ -1,15 +1,16 @@
 {
   "name": "fortissimo-html",
-  "version": "1.0.0",
+  "version": "1.0.0-alpha.1",
   "description": "Fortissimo HTML - Flexible, Forgiving, Formatting HTML Parser",
-  "main": "dist/src/index.js",
+  "main": "dist/index.js",
   "scripts": {
     "watch": "tsc -w",
     "test": "nyc mocha --require ts-node/register src/**/*.spec.ts && echo \"Restore HTML reporting!\"",
     "test-dev": "mocha --require ts-node/register -w --watch-extensions ts src/**/*.spec.ts",
     "test-debug": "nyc mocha --timeout 1800000 --require ts-node/register src/**/*.spec.ts",
     "speed": "ts-node-dev test/speed-test.ts",
-    "lint": "tslint --project ."
+    "lint": "tslint --project .",
+    "prepack": "rimraf dist/ && tsc"
   },
   "nyc": {
     "extension": [
@@ -56,8 +57,9 @@
   "engines": {
     "node": ">=6.5.0"
   },
-  "bin": "./dist/src/cli.js",
+  "bin": "./dist/cli.js",
   "dependencies": {
+    "@tubular/util": "^4.6.0",
     "commander": "^6.2.1",
     "fast-glob": "^3.2.5",
     "iconv-lite": "^0.5.2",
@@ -75,10 +77,11 @@
     "http-server": "^0.12.3",
     "mocha": "^8.3.2",
     "nyc": "^14.1.1",
+    "rimraf": "^3.0.2",
     "source-map-support": "^0.5.19",
     "ts-node-dev": "^1.1.6",
     "tslint-eslint-rules": "^5.4.0",
     "tslint-no-unused-expression-chai": "^0.1.4",
-    "typescript": "^3.9.9"
+    "typescript": "^4.5.5"
   }
 }

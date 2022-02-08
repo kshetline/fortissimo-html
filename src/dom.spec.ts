@@ -64,4 +64,21 @@ describe('dom', () => {
 
     expect(JSON.stringify(new CData('yeti', 0, 0, false))).does.not.contain('line').and.does.not.contain(']]>');
   });
+
+  it('should properly manipulate element attributes', async () => {
+    const node = DomNode.createNode('a');
+
+    expect(node.toString(true)).equals('<a></a>')
+    node.addAttribute('href', '#foo');
+    expect(node.toString(true)).equals('<a href="#foo"></a>')
+    node.addAttribute('disabled');
+    expect(node.toString(true)).equals('<a href="#foo" disabled></a>')
+    expect(node.attributeCount).equals(2)
+    node.setAttribute('href', '#bar');
+    expect(node.toString(true)).equals('<a href="#bar" disabled></a>')
+    node.deleteAttribute(1);
+    expect(node.toString(true)).equals('<a href="#bar"></a>')
+    node.clearAttributes()
+    expect(node.toString(true)).equals('<a></a>')
+   });
 });
