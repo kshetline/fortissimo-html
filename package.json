@@ -1,6 +1,6 @@
 {
   "name": "fortissimo-html",
-  "version": "1.0.0-alpha.1",
+  "version": "1.0.0-alpha.2",
   "description": "Fortissimo HTML - Flexible, Forgiving, Formatting HTML Parser",
   "main": "dist/index.js",
   "scripts": {

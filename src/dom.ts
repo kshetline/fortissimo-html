@@ -1,6 +1,6 @@
 import { FORMATTING_ELEMENTS, MARKER_ELEMENTS, OPEN_IMPLIES_CLOSE } from './elements';
 import { unescapeEntities } from './characters';
-import { isString } from '@tubular/util';
+import { isNumber, isString } from '@tubular/util';
 
 function last<T>(array: T[]): T {
   if (array && array.length > 0)
@@ -308,6 +308,23 @@ export class DomNode extends DomElement {
     this.children = this.children || [];
     child.parent = this;
     this.children.push(child);
+  }
+
+  remove(child?: number | DomElement): void {
+    if (isNumber(child))
+      this.children.splice(child, 1);
+    else if (child) {
+      const index = this.children.indexOf(child);
+
+      if (index >= 0)
+        this.children.splice(index, 1);
+    }
+    else if (this.parent) {
+      const index = this.parent.children.indexOf(this);
+
+      if (index >= 0)
+        this.parent.children.splice(index, 1);
+    }
   }
 
   setEndTag(text: string, line = 0, column = 0) {

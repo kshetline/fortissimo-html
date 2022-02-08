@@ -65,20 +65,30 @@ describe('dom', () => {
     expect(JSON.stringify(new CData('yeti', 0, 0, false))).does.not.contain('line').and.does.not.contain(']]>');
   });
 
-  it('should properly manipulate element attributes', async () => {
+  it('should properly manipulate element attributes', () => {
     const node = DomNode.createNode('a');
 
-    expect(node.toString(true)).equals('<a></a>')
+    expect(node.toString()).equals('<a></a>');
     node.addAttribute('href', '#foo');
-    expect(node.toString(true)).equals('<a href="#foo"></a>')
+    expect(node.toString()).equals('<a href="#foo"></a>');
     node.addAttribute('disabled');
-    expect(node.toString(true)).equals('<a href="#foo" disabled></a>')
-    expect(node.attributeCount).equals(2)
+    expect(node.toString()).equals('<a href="#foo" disabled></a>');
+    expect(node.attributeCount).equals(2);
     node.setAttribute('href', '#bar');
-    expect(node.toString(true)).equals('<a href="#bar" disabled></a>')
+    expect(node.toString()).equals('<a href="#bar" disabled></a>');
     node.deleteAttribute(1);
-    expect(node.toString(true)).equals('<a href="#bar"></a>')
-    node.clearAttributes()
-    expect(node.toString(true)).equals('<a></a>')
-   });
+    expect(node.toString()).equals('<a href="#bar"></a>');
+    node.clearAttributes();
+    expect(node.toString()).equals('<a></a>');
+  });
+
+  it('should be able to remove node', async () => {
+    const root: DomNode = (await parser.parse('<div><b>a</b><i>b</i><code>c</code></div>')).domRoot;
+    const i = root.querySelector('i');
+
+    i.remove();
+    expect(root.toString().trim()).equals('<div><b>a</b><code>c</code></div>');
+    root.querySelector('div').remove(0);
+    expect(root.toString().trim()).equals('<div><code>c</code></div>');
+  });
 });
