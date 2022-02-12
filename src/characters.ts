@@ -1,11 +1,9 @@
 import * as entitiesAsJson from './entities.json';
 
-export enum EntityStyle { DECIMAL, HEX, NUMERIC_SHORTEST, NAMED_OR_DECIMAL, NAMED_OR_HEX,
-                          NAMED_OR_SHORTEST, SHORTEST }
+export enum EntityStyle { DECIMAL, HEX, NUMERIC_SHORTEST, NAMED_OR_DECIMAL, NAMED_OR_HEX, NAMED_OR_SHORTEST, SHORTEST }
 const ES = EntityStyle;
 
-export enum ReencodeOptions { DONT_CHANGE, REPAIR_ONLY, LOOSE_MINIMAL, MINIMAL,
-                              NAMED_ENTITIES }
+export enum ReencodeOptions { DONT_CHANGE, REPAIR_ONLY, LOOSE_MINIMAL, MINIMAL, NAMED_ENTITIES }
 const RO = ReencodeOptions;
 
 export enum TargetEncoding { SEVEN_BIT, EIGHT_BIT, UNICODE }

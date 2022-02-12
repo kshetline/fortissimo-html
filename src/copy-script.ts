@@ -70,7 +70,7 @@ export function addCopyListener(prefix?: string): void {
         newSelection = parts.join('');
         copied = true;
       }
-      catch (err) {}
+      catch {}
     }
 
     if (!copied)
