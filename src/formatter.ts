@@ -458,7 +458,7 @@ function processOptions(options: HtmlFormatOptions): InternalOptions {
   return opts;
 }
 
-function applyTagList(originalSet: Set<string>, mods: string[]) {
+function applyTagList(originalSet: Set<string>, mods: string[]): Set<string> {
   const updated = new Set(originalSet);
 
   if (mods) {
@@ -490,7 +490,7 @@ function tabify(s: string, options: InternalOptions): string {
 }
 
 // noinspection JSUnusedLocalSymbols
-function detabify(s: string, options: InternalOptions): string {
+function detabify(s: string, options: InternalOptions): string { // eslint-disable-line @typescript-eslint/no-unused-vars
   if (options.useTabCharacters && s.includes('\t')) {
     const tabSize = options.tabSize;
     s = s.split(/([\r\n])/).map(ss => {

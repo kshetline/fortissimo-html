@@ -6,9 +6,9 @@ let throwCopyError = false;
 
 // noinspection JSUnusedGlobalSymbols
 const fakeCopyEvent = {
-  preventDefault: function () {},
+  preventDefault: function (): void {},
   clipboardData: {
-    setData: function (type: string, text: string) {
+    setData: function (type: string, text: string): void {
       clipboardText = text;
     }
   }
@@ -18,7 +18,7 @@ let callback: (event: any) => void;
 
 // noinspection JSUnusedGlobalSymbols
 const fakeElement = {
-  addEventListener: function (eventType: string, aCallback: (event: any) => void) {
+  addEventListener: function (eventType: string, aCallback: (event: any) => void): void {
     callback = aCallback;
   }
 };
@@ -35,15 +35,15 @@ class FakeClassList {
 
 // noinspection JSUnusedGlobalSymbols
 const fakeDocument = {
-  querySelector: function () {
+  querySelector: function (): HTMLElement {
     return docElement;
   },
-  getSelection: function () {
+  getSelection: function (): any {
     return {
       anchorNode: true,
-      getRangeAt: function () {
+      getRangeAt: function (): any {
         return {
-          cloneContents: function () {
+          cloneContents: function (): any {
             if (throwCopyError)
               throw new Error('fake copy error');
 
@@ -71,7 +71,7 @@ const fakeDocument = {
           }
         };
       },
-      toString: function () { return '·\t•↵foobar���'; }
+      toString: function (): string { return '·\t•↵foobar���'; }
     };
   }
 };

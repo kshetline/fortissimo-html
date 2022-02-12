@@ -179,7 +179,7 @@ function processOptions(options: HtmlStyleOptions): HtmlStyleOptions {
   return options;
 }
 
-function generateCss(options: HtmlStyleOptions) {
+function generateCss(options: HtmlStyleOptions): string {
   const prefix = options.stylePrefix;
 
   let css =

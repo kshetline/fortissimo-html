@@ -28,12 +28,12 @@ describe('characters', () => {
     expect(unescapeEntities(encoded)).equals(testStr);
 
     encoded = escapeToEntities(testStr, { reencode: ReencodeOptions.NAMED_ENTITIES, entityStyle: EntityStyle.SHORTEST,
-      target: TargetEncoding.EIGHT_BIT });
+                                          target: TargetEncoding.EIGHT_BIT });
     expect(encoded).contains('&#271;');
     expect(testStr).equals(unescapeEntities(encoded));
 
     encoded = escapeToEntities(testStr, { reencode: ReencodeOptions.NAMED_ENTITIES,
-      entityStyle: EntityStyle.NAMED_OR_DECIMAL });
+                                          entityStyle: EntityStyle.NAMED_OR_DECIMAL });
     expect(encoded).contains('&copy;');
     expect(testStr).equals(unescapeEntities(encoded));
   });
@@ -46,7 +46,7 @@ describe('characters', () => {
     expect(unescapeEntities(encoded)).equals(testStr);
 
     encoded = escapeToEntities(testStr, { target: TargetEncoding.SEVEN_BIT,
-      entityStyle: EntityStyle.DECIMAL });
+                                          entityStyle: EntityStyle.DECIMAL });
     expect(encoded).contains('&#160;');
     expect(unescapeEntities(encoded)).equals(testStr);
 

@@ -60,21 +60,21 @@ export function isEol(ch: string): boolean {
 }
 
 // The following trim functions differ from the standard string functions in that they only operate on HTML whitespace
-export function trim(s: string, skipNewlines = false) {
+export function trim(s: string, skipNewlines = false): string {
   if (skipNewlines)
     return (s || '').replace(/(?:^[ \t\f]+)|(?:[ \t\f]+$)/g, '');
   else
     return (s || '').replace(/(?:^[ \t\n\f\r]+)|(?:[ \t\n\f\r]+$)/g, '');
 }
 
-export function trimLeft(s: string, skipNewlines = false) {
+export function trimLeft(s: string, skipNewlines = false): string {
   if (skipNewlines)
     return (s || '').replace(/^[ \t\f]+/, '');
   else
     return (s || '').replace(/^[ \t\n\f\r]+/, '');
 }
 
-export function trimRight(s: string, skipNewlines = false) {
+export function trimRight(s: string, skipNewlines = false): string {
   if (skipNewlines)
     return (s || '').replace(/[ \t\f]+$/, '');
   else
@@ -108,7 +108,7 @@ export function replaceIsolatedSurrogates(s: string): string {
 
 // This combines two tests, whether a character is a valid first character of a standard HTML element
 // or custom HTML element, or if it's anything else that starts markup (/ ! ?) when it follows <.
-export function isMarkupStart(ch: string) {
+export function isMarkupStart(ch: string): boolean {
   return ch !== undefined && /[a-z:/!?]/i.test(ch);
 }
 
@@ -118,7 +118,7 @@ const PCENCharRanges = new RegExp(
 );
 
 // PCEN: Potential Custom Element Name
-export function isPCENChar(ch: string, loose = false) {
+export function isPCENChar(ch: string, loose = false): boolean {
   if (loose)
     return /[^ \n\r\t\f\/>]/.test(ch);
   else if (ch <= 'z')
@@ -128,7 +128,7 @@ export function isPCENChar(ch: string, loose = false) {
 
   const cp = ch.codePointAt(0);
 
-  return 0x10000 <= cp && cp <= 0xEFFFF;
+  return (0x10000 <= cp && cp <= 0xEFFFF);
 }
 
 export function isAllPCENChar(s: string, loose = false): boolean {
@@ -180,7 +180,7 @@ export function escapeToEntities(s: string, options?: EscapeOptions): string {
     const nextCh = s.charAt(i + 1) || '';
     const entityNeeded = (
       cp < 32 && !isWhitespace(ch) ||
-      0x7F <= cp && cp <= 0x9F ||
+      (0x7F <= cp && cp <= 0x9F) ||
       cp > highest ||
       options.reencode >= RO.MINIMAL && /[<>&]/.test(ch) ||
       options.reencode === RO.LOOSE_MINIMAL && (ch === '<' && (!nextCh || isMarkupStart(nextCh)) ||

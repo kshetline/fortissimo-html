@@ -27,7 +27,7 @@ export function CQ(quote: string): string {
   return quote.length < 2 ? quote : '';
 }
 
-export function isCommentLike(obj: any) {
+export function isCommentLike(obj: any): boolean {
   return (obj instanceof CommentElement || obj instanceof DeclarationElement || obj instanceof ProcessingElement) &&
          !(obj instanceof DocType);
 }
@@ -327,7 +327,7 @@ export class DomNode extends DomElement {
     }
   }
 
-  setEndTag(text: string, line = 0, column = 0) {
+  setEndTag(text: string, line = 0, column = 0): void {
     this.endTagText = text;
     this.endTagLine = line;
     this.endTagColumn = column;
@@ -437,8 +437,7 @@ export class DomNode extends DomElement {
     json.closureState = this.closureState;
 
     if (this.attributes.length > 0)
-      json.values = this.attributes.reduce((values: any, attrib, index) =>
-        { values[attrib] = this.values[index]; return values; }, {});
+      json.values = this.attributes.reduce((values: any, attrib, index) => { values[attrib] = this.values[index]; return values; }, {});
 
     if (this.parent)
       json.parentTag = this.parent.tag;
