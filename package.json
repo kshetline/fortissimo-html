@@ -5,7 +5,9 @@
     "ng": "ng",
     "start": "ng serve",
     "build": "ng build --configuration production --sourceMap=true",
+    "speed": "cd lib && (npm run speed || echo '') && cd ..",
     "test": "ng test",
+    "test-lib": "cd lib && (npm run test || echo '') && cd ..",
     "lint": "eslint 'src/**/*.ts' 'lib/src/**/*.ts'",
     "e2e": "ng e2e"
   },
