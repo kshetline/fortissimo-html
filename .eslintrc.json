@@ -5,6 +5,7 @@
     "node": true
   },
   "extends": [
+    "standard",
     "plugin:@typescript-eslint/eslint-recommended"
   ],
   "globals": {
@@ -17,8 +18,8 @@
     "sourceType": "module"
   },
   "plugins": [
-    "@typescript-eslint",
-    "chai-friendly"
+    "chai-friendly",
+    "@typescript-eslint"
   ],
   "ignorePatterns": ["dist/**/*"],
   "rules": {
@@ -41,8 +42,14 @@
         "functions": "never"
       }
     ],
+    "@typescript-eslint/consistent-type-assertions": [
+      "error",
+      {
+        "assertionStyle": "as"
+      }
+    ],
     "curly": "off",
-    "@typescript-eslint/explicit-function-return-type": "error",
+    "@typescript-eslint/explicit-function-return-type":  "error",
     "indent": "off",
     "@typescript-eslint/indent": [
       "error",
@@ -73,17 +80,18 @@
     "no-new": "off",
     "no-return-assign": "off",
     "no-unexpected-multiline": "off",
-    "no-unused-expressions": "off",
     "no-useless-constructor": "off",
     "@typescript-eslint/no-useless-constructor": "error",
+    "no-unused-expressions": "off",
     "chai-friendly/no-unused-expressions": "error",
     "no-unused-vars": "off",
     "@typescript-eslint/no-unused-vars": [
       "error",
       {
-        "vars": "all",
         "args": "after-used",
-        "ignoreRestSiblings": false
+        "argsIgnorePattern": "^_",
+        "ignoreRestSiblings": false,
+        "vars": "all"
       }
     ],
     "object-curly-newline": "off",

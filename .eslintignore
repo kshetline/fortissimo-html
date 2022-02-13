@@ -3,3 +3,5 @@ dist
 node_modules
 .idea
 .nyc_output
+e2e
+*.html

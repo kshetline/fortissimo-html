@@ -118,7 +118,7 @@ const PCENCharRanges = new RegExp(
 // PCEN: Potential Custom Element Name
 export function isPCENChar(ch: string, loose = false): boolean {
   if (loose)
-    return /[^ \n\r\t\f\/>]/.test(ch);
+    return /[^ \n\r\t\f/>]/.test(ch);
   else if (ch <= 'z')
     return /[-._0-9a-z]/i.test(ch);
   else if (ch.length === 1)
@@ -339,6 +339,7 @@ export function resolveEntity(entity: string): string {
 
 export function columnWidth(s: string): number {
   return s ? s.length -
+    // eslint-disable-next-line no-misleading-character-class
     (s.match(/[\u0300-\u036F\u1AB0-\u1AFF\u1DC0-\u1DFF\u20D0-\u20FF\uFE20-\uFE2F]|[\uD800-\uDBFF][\uDC00-\uDFFF]/g)
       || []).length : 0;
 }

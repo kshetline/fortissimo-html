@@ -495,7 +495,7 @@ function detabify(s: string, options: InternalOptions): string { // eslint-disab
     const tabSize = options.tabSize;
     s = s.split(/([\r\n])/).map(ss => {
       let adj = 0;
-      ss.replace(/\t/g, (match, offset) => {
+      return ss.replace(/\t/g, (match, offset) => {
         const len = (offset + adj) % tabSize | tabSize;
         adj += len - 1;
         return ' '.repeat(len);

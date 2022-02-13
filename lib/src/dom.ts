@@ -62,6 +62,7 @@ function stringToSelector(s: string): Selector {
 }
 
 export abstract class DomElement {
+  // eslint-disable-next-line no-use-before-define
   parent: DomNode;
   blockContext = false; // Used by formatter.ts
 

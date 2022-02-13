@@ -1,4 +1,5 @@
-import { processMillis } from './platform-specifics';
+/* eslint-disable node/no-callback-literal, no-case-declarations */
+import { processMillis } from '@tubular/util';
 import { VOID_ELEMENTS } from './elements';
 import { isAttributeNameChar, isEol, isMarkupStart, isPCENChar, isWhitespace } from './characters';
 import { CData, ClosureState, CommentElement, CQ, DeclarationElement, DocType, DomModel, DomNode, OQ,
@@ -88,7 +89,7 @@ const CAN_BE_HANDLED_GENERICALLY = new Set(['attribute', 'cdata', 'comment', 'de
 
 export class HtmlParser {
   private static TEXT_STARTERS =
-    new Set<State>([State.OUTSIDE_MARKUP, State.IN_SCRIPT_ELEMENT, State.IN_STYLE_ELEMENT, State.IN_TEXT_AREA_ELEMENT]);
+  new Set<State>([State.OUTSIDE_MARKUP, State.IN_SCRIPT_ELEMENT, State.IN_STYLE_ELEMENT, State.IN_TEXT_AREA_ELEMENT]);
 
   private static DEFAULT_OPTIONS: HtmlParserOptions = {
     emptyEndTag: true,
@@ -158,6 +159,7 @@ export class HtmlParser {
   on(event: 'attribute', callback: AttributeCallback): HtmlParser;
   on(event: 'cdata' | 'comment' | 'declaration' | 'generic' | 'processing' | 'start-tag-start',
     callback: BasicCallback): HtmlParser;
+
   on(event: 'completion', callback: CompletionCallback): HtmlParser;
   on(event: 'doctype', callback: DocTypeCallback): HtmlParser;
   on(event: 'encoding', callback: EncodingCallback): HtmlParser;
@@ -732,7 +734,7 @@ export class HtmlParser {
         this.charset = this.pendingCharset;
       }
       else if (attribLc === 'content') {
-        const charset = (/\bcharset[ \n\r\t\f]*=[ \n\r\t\f]*([\w\-]+)\b/i.exec(value) || [])[1];
+        const charset = (/\bcharset[ \n\r\t\f]*=[ \n\r\t\f]*([\w-]+)\b/i.exec(value) || [])[1];
 
         if (this.contentType)
           this.charset = charset;
@@ -771,7 +773,6 @@ export class HtmlParser {
 
     return true;
   }
-
 
   private handleDeclarationStartStepTwo(content: string, terminated: boolean, isCData: boolean): void {
     if (isCData) {
@@ -1085,7 +1086,7 @@ export class HtmlParser {
     let afterSlash = false;
 
     while ((ch = this.getChar(this.reAttribValue[quote])) &&
-           ch !== quote && (quote || (!isWhitespace(ch) && ch !== '>'))) {
+           ch !== quote && (quote || (!isWhitespace(ch) && ch !== '>'))) { // eslint-disable-line no-unmodified-loop-condition
       value += ch;
       afterSlash = ch === '/';
     }

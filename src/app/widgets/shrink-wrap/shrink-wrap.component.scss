@@ -1,0 +1,16 @@
+.outer-wrapper {
+  position: relative;
+}
+
+.sizer, .threshold-sizer {
+  height: 1px;
+  opacity: 0;
+  position: absolute;
+  width: 100%;
+  z-index: -1000;
+}
+
+.inner-wrapper {
+  position: relative;
+  width: fit-content;
+}

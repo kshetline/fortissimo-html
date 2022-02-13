@@ -84,6 +84,7 @@ describe('html-parser', () => {
         // docType.type.toUpperCase(), docType.variety ? ' ' + docType.variety : '',
         rebuilt += '<!' + docType.content + (terminated ? '>' : '');
       })
+      // eslint-disable-next-line node/handle-callback-err
       .on('error', (error, line, col, source) => {
         rebuilt += source || '';
       })
