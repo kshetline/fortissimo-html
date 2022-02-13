@@ -1,7 +1,7 @@
 /* eslint-disable prefer-const */
 import { expect } from 'chai';
-import fs from 'fs';
-import iconv from 'iconv-lite';
+import * as fs from 'fs';
+import * as iconv from 'iconv-lite';
 import { HtmlParser, ParseResults } from './html-parser';
 import { DocType } from './dom';
 

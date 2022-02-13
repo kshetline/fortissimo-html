@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import fs from 'fs';
+import * as fs from 'fs';
 import { HtmlParser } from './html-parser';
 import { SMALL_SAMPLE } from './html-parser.spec';
 import { CData, DomNode } from './dom';

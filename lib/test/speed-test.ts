@@ -7,7 +7,7 @@ let speedFortStd: number;
 let speedFortAsync: number;
 let speedFast: number;
 
-function first(done: () => void) {
+function first(done: () => void): void {
   const bench = benchmark((html: string, callback: any) => {
     const parser = new HtmlParser({ fast: true });
 
@@ -27,7 +27,7 @@ function first(done: () => void) {
   });
 }
 
-function second(done: () => void) {
+function second(done: () => void): void {
   const bench = benchmark((html: string, callback: any) => {
     const parser = new HtmlParser();
 
@@ -40,14 +40,14 @@ function second(done: () => void) {
       .parse(html);
   });
 
-  bench.on('result', (stat: any) => {
+  bench.on('result', (stat: any): void => {
     speedFortStd = stat.mean();
     console.log('fortissimo, std mode: ' + stat.mean().toPrecision(6) + ' ms/file ± ' + stat.sd().toPrecision(6));
     done();
   });
 }
 
-function third(done: () => void) {
+function third(done: () => void): void {
   const bench = benchmark((html: string, callback: any) => {
     const parser = new HtmlParser();
 
@@ -67,7 +67,7 @@ function third(done: () => void) {
   });
 }
 
-function fast(done: () => void) {
+function fast(done: () => void): void {
   const bench = benchmark((html: string, callback: any) => {
     FastHtmlParser.parse(html);
     callback();

@@ -1,7 +1,6 @@
 /* This file is meant to be stringified and used as ES5-compatible JavaScript. */
 
-// tslint:disable prefer-const
-// tslint:disable no-var-keyword
+// noinspection JSNonASCIINames, NonAsciiCharacters
 const wsReplacements: Record<string, string> = {
   '·': ' ',
   '↵\n': '\n',
