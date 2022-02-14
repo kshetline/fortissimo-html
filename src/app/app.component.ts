@@ -6,6 +6,7 @@ import { addCopyListener, formatHtml, HtmlParser, stylizeHtml, ValueQuoteStyle, 
 // import { MenuItem } from 'primeng/api';
 
 import { DEFAULT_PREFERENCES, Preferences, PreferencesService } from './preferences.service';
+// import { getCssValue, toNumber } from '@tubular/util';
 
 function screenTooSmallForTooltip(): boolean {
   return window.innerWidth < 480 || window.innerHeight < 480;
@@ -186,5 +187,13 @@ export class AppComponent implements OnDestroy, OnInit {
 
   updatePrefs(): void {
     this.prefsService.set(this.prefs);
+  }
+
+  onScroll(evt: Event): void {
+    const target = evt.target as HTMLElement;
+    const other = (target.id === 'source-elem' ? document.getElementById('output-elem-1') || document.getElementById('output-elem-2') : document.getElementById('source-elem'));
+    // const lineHeight = toNumber(getCssValue(target, 'line-height').replace('px', ''));
+
+    other.scrollTo(other.scrollLeft, target.scrollTop);
   }
 }

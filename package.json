@@ -9,7 +9,9 @@
     "test": "ng test",
     "test-lib": "cd lib && (npm run test || echo '') && cd ..",
     "lint": "eslint 'src/**/*.ts' 'lib/src/**/*.ts'",
-    "e2e": "ng e2e"
+    "e2e": "ng e2e",
+    "publish": "cd lib && npm publish",
+    "publish-dry": "cd lib && npm publish --dry-run"
   },
   "private": true,
   "dependencies": {
@@ -23,10 +25,11 @@
     "@angular/platform-browser-dynamic": "^13.2.2",
     "@angular/router": "^13.2.2",
     "@fortawesome/fontawesome-free": "^5.15.3",
+    "@tubular/util": "^4.6.0",
     "detect-resize": "^0.1.5",
     "lodash": "^4.17.21",
-    "primeicons": "^4.1.0",
-    "primeng": "^10.0.3",
+    "primeicons": "^5.0.0",
+    "primeng": "^13.1.1",
     "rxjs": "^6.6.7",
     "tslib": "^2.0.0",
     "zone.js": "~0.11.4"

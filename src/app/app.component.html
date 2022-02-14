@@ -50,7 +50,6 @@
   <div class="source">
     <h3>Source</h3>
     <div class="icons">
-      <!--suppress AngularUndefinedBinding -->
       <i class="fas fa-info-circle info" tooltipPosition="bottom" tooltipEvent="hover"
           [pTooltip]="inputInfo" [escape]="false" tooltipStyleClass="tooltip"
           (touchstart)="touchToHover($event)"></i>
@@ -60,7 +59,8 @@
 
   <h3>Reparsed</h3>
 
-  <textarea pInputTextarea
+  <textarea id='source-elem'
+      pInputTextarea
       title="Source"
       [(ngModel)]="source"
       autocapitalize="off"
@@ -70,14 +70,17 @@
       rows="40"
       spellcheck="false"
       (paste)="onPaste($event)"
-      (input)="onChange(true)"></textarea>
+      (input)="onChange(true)"
+      (scroll)="onScroll($event)"></textarea>
 
-  <div *ngIf="prefs.colorize"
+  <div *ngIf="prefs.colorize" id="output-elem-1"
       [innerHTML]="output"
       [ngClass]="{'dark-mode': prefs.darkMode, 'light-mode': !prefs.darkMode, 'new-line': endsInNewLine}"
-      class="code html-output"></div>
-  <div *ngIf="!prefs.colorize"
+      class="code html-output"
+      (scroll)="onScroll($event)"></div>
+  <div *ngIf="!prefs.colorize" id="output-elem-2"
       [innerText]="output"
       [ngClass]="{'dark-mode': prefs.darkMode, 'light-mode': !prefs.darkMode, 'new-line': endsInNewLine}"
-      class="code html-output"></div>
+      class="code html-output"
+      (scroll)="onScroll($event)"></div>
 </div>
