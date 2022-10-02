@@ -641,7 +641,7 @@ export class HtmlParser {
     if (ch !== '>') {
       if (ch === '/' && !this.xmlMode) {
         // Most browsers seem to simply ignore stray slashes in tags which aren't followed by `>`.
-        // Here will turn it into into its own valueless attribute.
+        // Here we will turn such a slash into its own valueless attribute.
         this.attribute = '/';
         this.leadingSpace = this.collectedSpace;
         this.collectedSpace = '';

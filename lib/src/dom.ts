@@ -1,6 +1,6 @@
 import { FORMATTING_ELEMENTS, MARKER_ELEMENTS, OPEN_IMPLIES_CLOSE } from './elements';
 import { unescapeEntities } from './characters';
-import { isNumber, isString } from '@tubular/util';
+import { flatten, isNumber, isString } from '@tubular/util';
 
 function last<T>(array: T[]): T {
   if (array && array.length > 0)
@@ -61,10 +61,26 @@ function stringToSelector(s: string): Selector {
   return selector;
 }
 
+function countLines(...groups: (string | string[])[]): number {
+  let count = 0;
+  const items = flatten(groups);
+
+  for (const item of items)
+    count += (item || '').match(/\r\n|\n|\r/g)?.length || 0;
+
+  return count;
+}
+
+export interface LineMapEntry {
+  displayLine: number;
+  element: DomElement; // eslint-disable-line no-use-before-define
+  sourceLine: number;
+}
+
 export abstract class DomElement {
-  // eslint-disable-next-line no-use-before-define
-  parent: DomNode;
+  parent: DomNode; // eslint-disable-line no-use-before-define
   blockContext = false; // Used by formatter.ts
+  displayLine: number;
 
   constructor(
     public content: string,
@@ -97,7 +113,18 @@ export abstract class DomElement {
     return depth;
   }
 
-  // noinspection JSUnusedGlobalSymbols
+  getLineMap(map?: LineMapEntry[], currentLine?: number[]): LineMapEntry[] {
+    if (this.parent) {
+      map = map ?? [];
+      map.push({ displayLine: (currentLine && currentLine[0]) ?? 1, element: this, sourceLine: this.line });
+    }
+
+    if (currentLine?.length && this.content)
+      currentLine[0] += countLines(this.content);
+
+    return map;
+  }
+
   toJSON(): any {
     return this.toString() + ' (' + this.depth +
       (this.line ? `; ${this.line}, ${this.column}` : '') +
@@ -219,6 +246,25 @@ export class DomNode extends DomElement {
 
     if (synthetic)
       this.synthetic = true;
+  }
+
+  getLineMap(map?: LineMapEntry[], currentLine?: number[]): LineMapEntry[] {
+    const wasEmpty = (map == null || map.length === 0);
+
+    currentLine = (currentLine?.length && currentLine) ?? [1];
+    map = map ?? [];
+    map = super.getLineMap(map, currentLine);
+    currentLine[0] += countLines(this.innerWhitespace, this.equals, this.spacing, this.values);
+
+    for (const child of this.children ?? [])
+      child.getLineMap(map, currentLine);
+
+    currentLine[0] += countLines(this.endTagText);
+
+    if (wasEmpty)
+      map.sort((a, b) => a.displayLine - b.displayLine);
+
+    return map;
   }
 
   get attributeCount(): number {

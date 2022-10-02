@@ -21,8 +21,10 @@
     "lib": [
       "es2018",
       "dom"
-    ]
+    ],
   },
+  "include": ["./ambient.d.ts", "src/**/*"],
+  "exclude": ["node_modules", "**/*.spec.ts"],
   "angularCompilerOptions": {
     "fullTemplateTypeCheck": true,
     "strictInjectionParameters": true

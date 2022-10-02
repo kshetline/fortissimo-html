@@ -16,7 +16,7 @@
   "private": true,
   "dependencies": {
     "@angular/animations": "^13.2.2",
-    "@angular/cdk": "^11.2.12",
+    "@angular/cdk": "^13.2.6",
     "@angular/common": "^13.2.2",
     "@angular/compiler": "^13.2.2",
     "@angular/core": "^13.2.2",
@@ -25,7 +25,7 @@
     "@angular/platform-browser-dynamic": "^13.2.2",
     "@angular/router": "^13.2.2",
     "@fortawesome/fontawesome-free": "^5.15.3",
-    "@tubular/util": "^4.6.0",
+    "@tubular/util": "^4.13.0",
     "detect-resize": "^0.1.5",
     "lodash": "^4.17.21",
     "primeicons": "^5.0.0",

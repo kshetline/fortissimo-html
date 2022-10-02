@@ -18,7 +18,7 @@
       "mocha", "node"
     ]
   },
-  "include": ["ambient.d.ts", "src/**/*"],
+  "include": ["../ambient.d.ts", "src/**/*"],
   "exclude": ["node_modules", "**/*.spec.ts"],
   "ts-node": {
     "files": true

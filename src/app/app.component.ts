@@ -142,6 +142,8 @@ export class AppComponent implements OnDestroy, OnInit {
         valueQuoting: this.prefs.quoting
       });
 
+    // console.log(dom.getLineMap());
+
     if (this.prefs.colorize) {
       const styled = stylizeHtml(dom, {
         dark: this.prefs.darkMode,
