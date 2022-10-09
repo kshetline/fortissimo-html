@@ -1,11 +1,10 @@
 {
   "env": {
-    "es2017": true,
+    "es2020": true,
     "mocha": true,
     "node": true
   },
   "extends": [
-    "standard",
     "plugin:@typescript-eslint/eslint-recommended"
   ],
   "globals": {
@@ -14,14 +13,14 @@
   },
   "parser": "@typescript-eslint/parser",
   "parserOptions": {
-    "ecmaVersion": 2018,
+    "ecmaVersion": 2020,
     "sourceType": "module"
   },
   "plugins": [
-    "chai-friendly",
-    "@typescript-eslint"
+    "@typescript-eslint",
+    "chai-friendly"
   ],
-  "ignorePatterns": ["dist/**/*"],
+  "ignorePatterns": ["dist/**/*", "**/*.html"],
   "rules": {
     "brace-style": "off",
     "@typescript-eslint/brace-style": [
@@ -42,14 +41,8 @@
         "functions": "never"
       }
     ],
-    "@typescript-eslint/consistent-type-assertions": [
-      "error",
-      {
-        "assertionStyle": "as"
-      }
-    ],
     "curly": "off",
-    "@typescript-eslint/explicit-function-return-type":  "error",
+    "@typescript-eslint/explicit-function-return-type": "error",
     "indent": "off",
     "@typescript-eslint/indent": [
       "error",

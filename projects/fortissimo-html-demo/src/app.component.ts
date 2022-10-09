@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { addCopyListener, formatHtml, HtmlParser, stylizeHtml, ValueQuoteStyle, ValueQuoting } from 'lib/src/index';
+import { addCopyListener, formatHtml, HtmlParser, stylizeHtml, ValueQuoteStyle, ValueQuoting } from '../../fortissimo-html/src';
 // import { isEqual } from 'lodash';
 // import { MenuItem } from 'primeng/api';
 
@@ -193,7 +193,8 @@ export class AppComponent implements OnDestroy, OnInit {
 
   onScroll(evt: Event): void {
     const target = evt.target as HTMLElement;
-    const other = (target.id === 'source-elem' ? document.getElementById('output-elem-1') || document.getElementById('output-elem-2') : document.getElementById('source-elem'));
+    const other = (target.id === 'source-elem' ? document.getElementById('output-elem-1') ||
+                   document.getElementById('output-elem-2') : document.getElementById('source-elem'));
     // const lineHeight = toNumber(getCssValue(target, 'line-height').replace('px', ''));
 
     other.scrollTo(other.scrollLeft, target.scrollTop);

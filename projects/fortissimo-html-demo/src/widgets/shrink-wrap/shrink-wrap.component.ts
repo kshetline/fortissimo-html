@@ -7,7 +7,7 @@ const DEFAULT_MIN = 0.75;
 
 // This component fails to work (sometimes in a very dramatic fashion, with the content it's
 // supposed to be showing doing a dramatic animated dive off the screen!) on the original
-// non-Chromium version of Microsoft Edge. Therefore we want to disable it for that browser.
+// non-Chromium version of Microsoft Edge. Therefore, we want to disable it for that browser.
 // At the time of this writing, the user agent string for the original Edge has the word
 // "Edge" fully spelled out, while the beta Chromium Edge simply has "Edg". If that changes
 // in the future, the test for Edge below will have to be updated.
@@ -45,8 +45,8 @@ export class ShrinkWrapComponent implements AfterViewInit, OnDestroy, OnInit {
   @ViewChild('sizer', { static: true }) sizerRef: ElementRef;
   @ViewChild('thresholdSizer', { static: true }) thresholdSizerRef: ElementRef;
 
-  @Input() get minScale(): number { return this._minScale; }
-  set minScale(newValue: number) {
+  @Input() get minScale(): number | string { return this._minScale; }
+  set minScale(newValue: number | string) {
     if (typeof newValue as any === 'string') {
       const $ = /([\d.]+)(%)?/.exec(newValue as any as string);
 
@@ -56,12 +56,14 @@ export class ShrinkWrapComponent implements AfterViewInit, OnDestroy, OnInit {
         if ($[2])
           newValue /= 100;
       }
+      else
+        newValue = DEFAULT_MIN;
     }
 
-    if (isNaN(newValue) || !newValue)
+    if (isNaN(newValue as number) || !newValue)
       this._minScale = DEFAULT_MIN;
     else
-      this._minScale = Math.min(Math.max(newValue, 0.01), 1);
+      this._minScale = Math.min(Math.max(newValue as number, 0.01), 1);
   }
 
   // eslint-disable-next-line accessor-pairs
@@ -146,7 +148,7 @@ export class ShrinkWrapComponent implements AfterViewInit, OnDestroy, OnInit {
     // Compensation, if needed, for the 0.05px padding used to prevent margin collapse.
     const sizerAdjust = (sizerWidth < scalingWidth)  ? 0.1 : 0;
 
-    this.scale = Math.min(Math.max((sizerWidth - sizerAdjust) / scalingWidth, this.minScale), 1);
+    this.scale = Math.min(Math.max((sizerWidth - sizerAdjust) / scalingWidth, this.minScale as number), 1);
 
     const scaledWidth = scalingWidth * this.scale;
     const scaledHeight = scaledWidth * innerHeight / innerWidth;

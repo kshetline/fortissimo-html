@@ -1,4 +1,3 @@
-/* eslint-disable prefer-const */
 import { expect } from 'chai';
 import * as fs from 'fs';
 import * as iconv from 'iconv-lite';
@@ -84,7 +83,7 @@ describe('html-parser', () => {
         // docType.type.toUpperCase(), docType.variety ? ' ' + docType.variety : '',
         rebuilt += '<!' + docType.content + (terminated ? '>' : '');
       })
-      // eslint-disable-next-line node/handle-callback-err
+      // eslint-disable-next-line handle-callback-err
       .on('error', (error, line, col, source) => {
         rebuilt += source || '';
       })
@@ -123,15 +122,14 @@ describe('html-parser', () => {
   it('should handle switch from wrong encoding to correct encoding', () => {
     let content = fs.readFileSync('./test/sample-iso-8859-1.html', 'utf-8');
     const parser = new HtmlParser();
-    let results: ParseResults;
     let encoding = 'utf8';
-    let reconstituted: string;
 
     parser.on('encoding', enc => { encoding = enc; return true; }).parse(content);
     parser.off('encoding');
     content = iconv.decode(fs.readFileSync('./test/sample-iso-8859-1.html'), encoding);
-    results = parser.parse(content);
-    reconstituted = results.toString();
+
+    const results = parser.parse(content);
+    const reconstituted = results.toString();
 
     expect(content).equals(reconstituted);
     expect(reconstituted).contains('Mañana');
@@ -196,9 +194,8 @@ describe('html-parser', () => {
     const content = SMALL_SAMPLE.substr(0, endBody) + '</> </ >' + SMALL_SAMPLE.substr(endBody);
     const parser = new HtmlParser({ emptyEndTag: false });
     let rebuilt = '';
-    let results: ParseResults;
 
-    results = parser
+    const results = parser
       .on('generic', (depth, text) => {
         rebuilt += text;
       })
@@ -218,9 +215,8 @@ describe('html-parser', () => {
       const content = SMALL_SAMPLE + ending;
       const parser = new HtmlParser();
       let rebuilt = '';
-      let results: ParseResults;
 
-      results = parser
+      const results = parser
         .on('generic', (depth, text) => {
           rebuilt += text;
         })

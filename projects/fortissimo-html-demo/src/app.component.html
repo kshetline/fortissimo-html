@@ -4,13 +4,13 @@
   <div class="details">
     <p-fieldset legend="Detailed settings" [toggleable]="true" [(collapsed)]="detailsCollapsed">
       <div class="boolean-options">
-        <p-checkbox binary="true" label="colorize"
+        <p-checkbox [binary]="true" label="colorize"
             [(ngModel)]="prefs.colorize" (onChange)="onChange()"></p-checkbox>
-        <p-checkbox binary="true" label="darkMode"
+        <p-checkbox [binary]="true" label="darkMode"
             [(ngModel)]="prefs.darkMode" (onChange)="updatePrefs()"></p-checkbox>
-        <p-checkbox binary="true" label="reformat"
+        <p-checkbox [binary]="true" label="reformat"
             [(ngModel)]="prefs.reformat" (onChange)="onChange()"></p-checkbox>
-        <p-checkbox binary="true" label="showWhitespace"
+        <p-checkbox [binary]="true" label="showWhitespace"
             [disabled]="!prefs.colorize"
             [(ngModel)]="prefs.showWhitespace" (onChange)="onChange()"></p-checkbox>
       </div>

@@ -1,4 +1,4 @@
-/* eslint-disable node/no-callback-literal, no-case-declarations */
+/* eslint-disable no-case-declarations */
 import { processMillis } from '@tubular/util';
 import { VOID_ELEMENTS } from './elements';
 import { isAttributeNameChar, isEol, isMarkupStart, isPCENChar, isWhitespace } from './characters';
@@ -89,7 +89,7 @@ const CAN_BE_HANDLED_GENERICALLY = new Set(['attribute', 'cdata', 'comment', 'de
 
 export class HtmlParser {
   private static TEXT_STARTERS =
-  new Set<State>([State.OUTSIDE_MARKUP, State.IN_SCRIPT_ELEMENT, State.IN_STYLE_ELEMENT, State.IN_TEXT_AREA_ELEMENT]);
+    new Set<State>([State.OUTSIDE_MARKUP, State.IN_SCRIPT_ELEMENT, State.IN_STYLE_ELEMENT, State.IN_TEXT_AREA_ELEMENT]);
 
   private static DEFAULT_OPTIONS: HtmlParserOptions = {
     emptyEndTag: true,

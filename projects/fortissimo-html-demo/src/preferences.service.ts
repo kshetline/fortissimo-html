@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { ValueQuoteStyle, ValueQuoting } from 'lib/src/index';
+import { ValueQuoteStyle, ValueQuoting } from '../../fortissimo-html/src';
 import { cloneDeep, debounce } from 'lodash';
 
 export interface Preferences {

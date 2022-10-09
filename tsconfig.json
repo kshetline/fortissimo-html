@@ -3,30 +3,32 @@
   "compilerOptions": {
     "allowSyntheticDefaultImports": true,
     "baseUrl": "./",
-    "outDir": "./dist/out-tsc",
-    "sourceMap": true,
     "declaration": false,
     "declarationMap": true,
     "downlevelIteration": true,
     "esModuleInterop": true,
     "experimentalDecorators": true,
-    "module": "es2020",
-    "moduleResolution": "node",
+    "forceConsistentCasingInFileNames": true,
     "importHelpers": true,
-    "resolveJsonModule": true,
-    "target": "es2015",
-    "types": [
-      "jasmine", "mocha", "node"
-    ],
     "lib": [
-      "es2018",
+      "es2020",
       "dom"
     ],
+    "module": "es2020",
+    "moduleResolution": "node",
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+    "resolveJsonModule": true,
+    "sourceMap": true,
+    "target": "es2020",
+    "types": ["chai", "mocha", "node"]
   },
-  "include": ["./ambient.d.ts", "src/**/*"],
+  "include": ["./ambient.d.ts", "**/src/**/*"],
   "exclude": ["node_modules", "**/*.spec.ts"],
   "angularCompilerOptions": {
-    "fullTemplateTypeCheck": true,
-    "strictInjectionParameters": true
+    "enableI18nLegacyMessageIdFormat": false,
+    "strictInjectionParameters": true,
+    "strictInputAccessModifiers": true,
+    "strictTemplates": true
   }
 }
