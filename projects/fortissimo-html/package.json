@@ -24,21 +24,22 @@
   "bin": "./dist/cli.js",
   "type": "module",
   "scripts": {
-    "watch": "tsc -w",
-    "test": "nyc mocha --require ts-node/register src/**/*.spec.ts && echo \"Restore HTML reporting!\"",
-    "test-dev": "mocha --require ts-node/register -w --watch-extensions ts src/**/*.spec.ts",
-    "test-debug": "nyc mocha --timeout 1800000 --require ts-node/register src/**/*.spec.ts",
-    "speed": "ts-node --files test/speed-test.ts",
-    "lint": "eslint 'src/**/*.ts'",
-    "prepack": "rimraf dist/ && tsc"
+    "build": "rimraf dist/ && tsc && rollup -c -m && webpack",
+    "prepublishOnly": "npm run build",
+    "lint": "eslint 'src/**/*.ts' '**/*.cjs'"
   },
   "dependencies": {
     "@tubular/util": "^4.13.0",
-    "commander": "^9.4.1",
+    "commander": "^6.2.1",
     "fast-glob": "^3.2.12",
     "iconv-lite": "^0.6.3"
   },
   "devDependencies": {
+    "@babel/core": "^7.14.6",
+    "@babel/preset-env": "^7.14.7",
+    "@babel/register": "^7.14.5",
+    "@rollup/plugin-json": "^4.1.0",
+    "@rollup/plugin-typescript": "^8.2.1",
     "@types/chai": "^4.3.3",
     "@types/fast-html-parser": "^1.0.2",
     "@types/glob": "^8.0.0",
@@ -46,6 +47,7 @@
     "@types/node": "^14.14.31",
     "@typescript-eslint/eslint-plugin": "^5.39.0",
     "@typescript-eslint/parser": "^5.39.0",
+    "babel-loader": "^8.2.2",
     "chai": "^4.3.6",
     "eslint": "^8.25.0",
     "eslint-config-standard": "^17.0.0",
@@ -58,10 +60,16 @@
     "http-server": "^14.1.1",
     "mocha": "^10.0.0",
     "nyc": "^15.1.0",
+    "replace": "^1.2.1",
     "rimraf": "^3.0.2",
-    "source-map-support": "^0.5.21",
-    "ts-node": "^10.9.1",
-    "typescript": "^4.8.4"
+    "rollup": "^2.52.7",
+    "rollup-plugin-sourcemaps": "^0.6.3",
+    "rollup-plugin-terser": "^7.0.2",
+    "terser-webpack-plugin": "^5.1.4",
+    "typescript": "^4.8.4",
+    "webpack": "^5.42.0",
+    "webpack-cli": "^4.7.2",
+    "webpack-node-externals": "^3.0.0"
   },
   "nyc": {
     "extension": [
