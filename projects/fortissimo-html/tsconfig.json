@@ -1,8 +1,30 @@
 /* To learn more about this file see: https://angular.io/config/tsconfig. */
 {
-  "extends": "../../tsconfig.json",
+  "compileOnSave": false,
   "compilerOptions": {
-    "outDir": "./dist"
+    "allowSyntheticDefaultImports": true,
+    "declaration": true,
+    "declarationMap": true,
+    "downlevelIteration": true,
+    "emitDecoratorMetadata": true,
+    "esModuleInterop": true,
+    "experimentalDecorators": true,
+    "lib": [
+      "es2020",
+      "dom"
+    ],
+    "moduleResolution": "node",
+    "noImplicitAny": true,
+    "outDir": "./dist",
+    "resolveJsonModule": true,
+    "sourceMap": true,
+    "strictNullChecks": false,
+    "target": "ES2018",
+    "types": [
+      "chai",
+      "mocha",
+      "node"
+    ]
   },
   "include": ["../../ambient.d.ts", "./src/**/*"],
   "exclude": ["node_modules", "**/*.spec.ts"]

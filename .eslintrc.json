@@ -65,6 +65,7 @@
     "guard-for-in": "error",
     "key-spacing": "off",
     "multiline-ternary": "off",
+    "n/no-callback-literal": "off",
     "no-control-regex": "off",
     "no-empty": "off",
     "no-labels": "off",

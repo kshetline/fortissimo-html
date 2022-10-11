@@ -6,12 +6,12 @@
     "ng": "ng",
     "start": "ng serve",
     "build": "ng build --configuration production --sourceMap=true",
-    "build:demo": "ng build fortissimo-html-demo",
+    "build:lib": "cd projects/fortissimo-html && (npm run build || echo '') && cd ../..",
     "test": "ng test",
     "test-lib": "cd projects/fortissimo-html && (npm run test || echo '') && cd ../..",
     "lint": "eslint 'projects/**/src/**/*.ts'",
-    "publish-dry": "npm run build && npm publish ./dist/xxx/ --dry-run",
-    "publish": "npm run build && npm publish ./dist/xxx/"
+    "publish-dry": "cd projects/fortissimo-html && (npm publish --dry-run || echo '') && cd ../..",
+    "publish": "cd projects/fortissimo-html && (npm publish || echo '') && cd ../.."
   },
   "dependencies": {
     "@angular/animations": "^14.2.3",
