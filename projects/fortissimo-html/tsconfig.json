@@ -1,4 +1,3 @@
-/* To learn more about this file see: https://angular.io/config/tsconfig. */
 {
   "compileOnSave": false,
   "compilerOptions": {
@@ -19,7 +18,7 @@
     "resolveJsonModule": true,
     "sourceMap": true,
     "strictNullChecks": false,
-    "target": "ES2018",
+    "target": "es2018",
     "types": [
       "chai",
       "mocha",
@@ -27,5 +26,10 @@
     ]
   },
   "include": ["../../ambient.d.ts", "./src/**/*"],
-  "exclude": ["node_modules", "**/*.spec.ts"]
+  "exclude": [
+    "**/*.spec.ts",
+    "dist",
+    "node_modules",
+    "test"
+  ]
 }

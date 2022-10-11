@@ -24,7 +24,7 @@
     "types": ["chai", "mocha", "node"]
   },
   "include": ["./ambient.d.ts", "**/src/**/*"],
-  "exclude": ["node_modules", "**/*.spec.ts"],
+  "exclude": ["node_modules", "**/*.spec.ts", "test"],
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,
     "strictInjectionParameters": true,

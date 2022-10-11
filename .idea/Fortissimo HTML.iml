@@ -5,6 +5,10 @@
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/dist" />
       <excludeFolder url="file://$MODULE_DIR$/tmp" />
+      <excludeFolder url="file://$MODULE_DIR$/.angular/cache" />
+      <excludeFolder url="file://$MODULE_DIR$/projects/fortissimo-html/.nyc_output" />
+      <excludeFolder url="file://$MODULE_DIR$/projects/fortissimo-html/coverage" />
+      <excludeFolder url="file://$MODULE_DIR$/projects/fortissimo-html/test-output" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

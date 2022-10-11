@@ -2,8 +2,10 @@
 import { processMillis } from '@tubular/util';
 import { VOID_ELEMENTS } from './elements';
 import { isAttributeNameChar, isEol, isMarkupStart, isPCENChar, isWhitespace } from './characters';
-import { CData, ClosureState, CommentElement, CQ, DeclarationElement, DocType, DomModel, DomNode, OQ,
-  ProcessingElement, TextElement, UnmatchedClosingTag } from './dom';
+import {
+  CData, ClosureState, CommentElement, CQ, DeclarationElement, DocType, DomModel, DomNode, OQ,
+  ProcessingElement, TextElement, UnmatchedClosingTag
+} from './dom';
 
 export interface HtmlParserOptions {
   emptyEndTag?: boolean;

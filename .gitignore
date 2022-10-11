@@ -47,3 +47,4 @@ test-output
 # System Files
 .DS_Store
 Thumbs.db
+/projects/fortissimo-html/coverage/

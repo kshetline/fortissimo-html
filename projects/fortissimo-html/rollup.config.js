@@ -1,4 +1,5 @@
 import json from '@rollup/plugin-json';
+import { nodeResolve } from '@rollup/plugin-node-resolve';
 import sourcemaps from 'rollup-plugin-sourcemaps';
 import { terser } from 'rollup-plugin-terser';
 import typescript from '@rollup/plugin-typescript';
@@ -18,6 +19,7 @@ export default [
     ],
     plugins: [
       json(),
+      nodeResolve(),
       sourcemaps(),
       terser({ output: { max_line_len: 511 } }),
       typescript({ sourceMap: true, inlineSources: true })

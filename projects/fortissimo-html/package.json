@@ -2,10 +2,11 @@
   "name": "fortissimo-html",
   "version": "1.0.0-alpha.4",
   "description": "Fortissimo HTML - Flexible, Forgiving, Formatting HTML Parser",
-  "main": "dist/index.js",
+  "main": "dist/cjs/index.js",
   "module": "dist/fesm2015/index.js",
   "esm2015": "dist/index.js",
   "fesm2015": "dist/fesm2015/index.js",
+  "bin": "dist/cli.js",
   "typings": "dist/index",
   "sideEffects": false,
   "exports": {
@@ -13,6 +14,15 @@
     "require": "./dist/cjs/index.js",
     "script": "./dist/umd/index.js",
     "default": "./dist/cjs/index.js"
+  },
+  "engines": {
+    "node": ">=10.24.1"
+  },
+  "scripts": {
+    "build": "rimraf dist/ && tsc && rollup -c -m && webpack",
+    "prepublishOnly": "npm run build",
+    "lint": "eslint 'src/**/*.ts' '**/*.cjs'",
+    "test": "nyc --reporter=html mocha --require ts-node/register src/**/*.spec.ts"
   },
   "keywords": [
     "html",
@@ -25,21 +35,6 @@
   ],
   "author": "Kerry Shetline <kerry@shetline.com>",
   "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/kshetline/fortissimo-html.git"
-  },
-  "engines": {
-    "node": ">=6.5.0"
-  },
-  "bin": "./dist/cli.js",
-  "type": "module",
-  "scripts": {
-    "build": "rimraf dist/ && tsc && rollup -c -m && webpack",
-    "lint": "eslint 'src/**/*.ts' '**/*.cjs'",
-    "prepublishOnly": "npm run build",
-    "test": "nyc --reporter=html mocha --require ts-node/register src/**/*.spec.ts"
-  },
   "dependencies": {
     "@tubular/util": "^4.13.0",
     "commander": "^6.2.1",
@@ -47,19 +42,20 @@
     "iconv-lite": "^0.6.3"
   },
   "devDependencies": {
-    "@babel/core": "^7.14.6",
-    "@babel/preset-env": "^7.14.7",
-    "@babel/register": "^7.14.5",
-    "@rollup/plugin-json": "^4.1.0",
-    "@rollup/plugin-typescript": "^8.2.1",
+    "@babel/core": "^7.19.3",
+    "@babel/preset-env": "^7.19.4",
+    "@babel/register": "^7.18.9",
+    "@rollup/plugin-json": "^5.0.0",
+    "@rollup/plugin-node-resolve": "^15.0.0",
+    "@rollup/plugin-typescript": "^9.0.1",
     "@types/chai": "^4.3.3",
     "@types/fast-html-parser": "^1.0.2",
     "@types/glob": "^8.0.0",
     "@types/mocha": "^8.2.2",
-    "@types/node": "^15.14.9",
-    "@typescript-eslint/eslint-plugin": "^5.39.0",
-    "@typescript-eslint/parser": "^5.39.0",
-    "babel-loader": "^8.2.2",
+    "@types/node": "^15.14.0",
+    "@typescript-eslint/eslint-plugin": "^5.40.0",
+    "@typescript-eslint/parser": "^5.40.0",
+    "babel-loader": "^8.2.5",
     "chai": "^4.3.6",
     "eslint": "^8.25.0",
     "eslint-config-standard": "^17.0.0",
@@ -70,19 +66,24 @@
     "fast-html-parser": "^1.0.1",
     "htmlparser-benchmark": "^1.1.3",
     "http-server": "^14.1.1",
-    "mocha": "^9.2.2",
+    "mocha": "^10.0.0",
     "nyc": "^15.1.0",
     "replace": "^1.2.1",
     "rimraf": "^3.0.2",
-    "rollup": "^2.52.7",
+    "rollup": "^2.79.1",
     "rollup-plugin-sourcemaps": "^0.6.3",
     "rollup-plugin-terser": "^7.0.2",
-    "terser-webpack-plugin": "^5.1.4",
-    "ts-node": "~10.0.0",
-    "typescript": "~4.3.5",
-    "webpack": "^5.42.0",
-    "webpack-cli": "^4.7.2",
+    "terser-webpack-plugin": "^5.3.6",
+    "ts-node": "^10.9.1",
+    "tslib": "^2.4.0",
+    "typescript": "^4.8.4",
+    "webpack": "^5.74.0",
+    "webpack-cli": "^4.10.0",
     "webpack-node-externals": "^3.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kshetline/fortissimo-html.git"
   },
   "nyc": {
     "extension": [
