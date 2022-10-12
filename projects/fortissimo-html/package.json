@@ -22,7 +22,8 @@
     "build": "rimraf dist/ && tsc && rollup -c -m && webpack",
     "prepublishOnly": "npm run build",
     "lint": "eslint 'src/**/*.ts' '**/*.cjs'",
-    "test": "nyc --reporter=html mocha --require ts-node/register src/**/*.spec.ts"
+    "test": "nyc --reporter=html mocha --require ts-node/register src/**/*.spec.ts",
+    "test-speed": "ts-node --files test/speed-test.ts"
   },
   "keywords": [
     "html",

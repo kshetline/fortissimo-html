@@ -25,11 +25,11 @@
       "node"
     ]
   },
-  "include": ["../../ambient.d.ts", "./src/**/*"],
+  "include": ["../../ambient.d.ts", "./src/**/*", "./test/htmlparser-benchmark.d.ts"],
   "exclude": [
     "**/*.spec.ts",
     "dist",
     "node_modules",
-    "test"
+    "test/speed-test.ts"
   ]
 }

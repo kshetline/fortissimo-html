@@ -9,6 +9,7 @@
       <excludeFolder url="file://$MODULE_DIR$/projects/fortissimo-html/.nyc_output" />
       <excludeFolder url="file://$MODULE_DIR$/projects/fortissimo-html/coverage" />
       <excludeFolder url="file://$MODULE_DIR$/projects/fortissimo-html/test-output" />
+      <excludeFolder url="file://$MODULE_DIR$/.nyc_output" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

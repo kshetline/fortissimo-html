@@ -9,6 +9,7 @@
     "build:lib": "cd projects/fortissimo-html && (npm run build || echo '') && cd ../..",
     "test": "ng test",
     "test-lib": "cd projects/fortissimo-html && (npm run test || echo '') && cd ../..",
+    "test-speed": "cd projects/fortissimo-html && (npm run test-speed || echo '') && cd ../..",
     "lint": "eslint 'projects/**/src/**/*.ts'",
     "publish-dry": "cd projects/fortissimo-html && (npm publish --dry-run || echo '') && cd ../..",
     "publish": "cd projects/fortissimo-html && (npm publish || echo '') && cd ../.."
