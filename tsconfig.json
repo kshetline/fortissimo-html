@@ -20,8 +20,13 @@
     "noImplicitReturns": true,
     "resolveJsonModule": true,
     "sourceMap": true,
-    "target": "es2020",
-    "types": ["chai", "mocha", "node"]
+    "target": "ES2022",
+    "types": [
+      "chai",
+      "mocha",
+      "node"
+    ],
+    "useDefineForClassFields": false
   },
   "include": ["./ambient.d.ts", "**/src/**/*"],
   "exclude": ["node_modules", "**/*.spec.ts", "test"],
