@@ -62,7 +62,7 @@
             ],
             "scripts": [],
             "vendorChunk": true,
-            "sourceMap": true,
+            "sourceMap": true
           },
           "configurations": {
             "production": {
